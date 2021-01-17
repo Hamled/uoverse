@@ -3,5 +3,8 @@ name = "ultimaonline-net"
 version = "0.1.0"
 authors = ["Charles Ellis <hamled@hamled.dev>"]
 edition = "2018"
+description = "Library for the Ultima Online network protocol."
 
 [dependencies]
+nom = "6.0.1"
+serde = "1.0.119"
