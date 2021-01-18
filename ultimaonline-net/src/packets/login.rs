@@ -28,3 +28,24 @@ impl Serialize for LoginRejection {
         s.end()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ser::to_writer;
+    #[test]
+    fn serialize_login_rejection() {
+        let rej_invalid = [0x82u8, 0];
+
+        let mut packet: Vec<u8> = Vec::new();
+
+        to_writer(
+            &mut packet,
+            &LoginRejection {
+                reason: LoginRejectionReason::Invalid,
+            },
+        )
+        .expect("Failed to write packet");
+        assert_eq!(packet.as_slice(), rej_invalid);
+    }
+}

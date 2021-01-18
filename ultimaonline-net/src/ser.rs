@@ -2,15 +2,15 @@ use crate::error::{Error, Result};
 use serde::{ser, Serialize};
 use std::io;
 
-pub struct Serializer<W>
+pub struct Serializer<'a, W>
 where
     W: io::Write,
 {
-    writer: W,
+    writer: &'a mut W,
 }
 
 #[inline]
-pub fn to_writer<W, T>(writer: W, value: &T) -> Result<()>
+pub fn to_writer<'a, W, T>(writer: &'a mut W, value: &'a T) -> Result<()>
 where
     W: io::Write,
     T: Serialize,
@@ -21,7 +21,7 @@ where
     Ok(())
 }
 
-impl<'a, W> ser::Serializer for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::Serializer for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -200,7 +200,7 @@ where
     }
 }
 
-impl<'a, W> ser::SerializeSeq for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeSeq for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -220,7 +220,7 @@ where
     }
 }
 
-impl<W> Serializer<W>
+impl<W> Serializer<'_, W>
 where
     W: io::Write,
 {
@@ -233,7 +233,7 @@ where
     }
 }
 
-impl<'a, W> ser::SerializeTuple for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeTuple for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -253,7 +253,7 @@ where
     }
 }
 
-impl<'a, W> ser::SerializeTupleStruct for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeTupleStruct for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -273,7 +273,7 @@ where
     }
 }
 
-impl<'a, W> ser::SerializeStruct for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeStruct for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -295,7 +295,7 @@ where
 
 // Unimplemented serializer types
 
-impl<'a, W> ser::SerializeTupleVariant for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeTupleVariant for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -315,7 +315,7 @@ where
     }
 }
 
-impl<'a, W> ser::SerializeMap for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeMap for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
@@ -341,7 +341,7 @@ where
     }
 }
 
-impl<'a, W> ser::SerializeStructVariant for &'a mut Serializer<W>
+impl<'a, 'b, W> ser::SerializeStructVariant for &'a mut Serializer<'b, W>
 where
     W: io::Write,
 {
