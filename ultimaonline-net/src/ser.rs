@@ -110,6 +110,18 @@ where
         Ok(self)
     }
 
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
+        Ok(self)
+    }
+
+    fn serialize_tuple_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleStruct> {
+        Ok(self)
+    }
+
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
         Ok(self)
     }
@@ -160,18 +172,6 @@ where
     where
         T: ?Sized + Serialize,
     {
-        unimplemented!()
-    }
-
-    fn serialize_tuple(self, _: usize) -> Result<Self::SerializeTuple> {
-        unimplemented!()
-    }
-
-    fn serialize_tuple_struct(
-        self,
-        _: &'static str,
-        _: usize,
-    ) -> Result<Self::SerializeTupleStruct> {
         unimplemented!()
     }
 
@@ -233,6 +233,46 @@ where
     }
 }
 
+impl<'a, W> ser::SerializeTuple for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_element<T>(&mut self, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        value.serialize(&mut **self)
+    }
+
+    // Standard ending without any null terminator
+    fn end(self) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a, W> ser::SerializeTupleStruct for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_field<T>(&mut self, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        value.serialize(&mut **self)
+    }
+
+    // Standard ending without any null terminator
+    fn end(self) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl<'a, W> ser::SerializeStruct for &'a mut Serializer<W>
 where
     W: io::Write,
@@ -254,45 +294,6 @@ where
 }
 
 // Unimplemented serializer types
-impl<'a, W> ser::SerializeTuple for &'a mut Serializer<W>
-where
-    W: io::Write,
-{
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_element<T>(&mut self, _value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
-        unimplemented!()
-    }
-
-    // Standard ending without any null terminator
-    fn end(self) -> Result<()> {
-        unimplemented!()
-    }
-}
-
-impl<'a, W> ser::SerializeTupleStruct for &'a mut Serializer<W>
-where
-    W: io::Write,
-{
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_field<T>(&mut self, _value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
-        unimplemented!()
-    }
-
-    // Standard ending without any null terminator
-    fn end(self) -> Result<()> {
-        unimplemented!()
-    }
-}
 
 impl<'a, W> ser::SerializeTupleVariant for &'a mut Serializer<W>
 where
