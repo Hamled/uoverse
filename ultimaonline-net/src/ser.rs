@@ -110,6 +110,10 @@ where
         Ok(self)
     }
 
+    fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
+        Ok(self)
+    }
+
     // Lots of stuff unimplemented as it's not needed
 
     fn serialize_str(self, _: &str) -> Result<()> {
@@ -185,10 +189,6 @@ where
         unimplemented!()
     }
 
-    fn serialize_struct(self, _: &'static str, _: usize) -> Result<Self::SerializeStruct> {
-        unimplemented!()
-    }
-
     fn serialize_struct_variant(
         self,
         _: &'static str,
@@ -230,6 +230,26 @@ where
 
     fn end_terminator(&mut self, terminator: &[u8]) -> Result<()> {
         self.writer.write_all(terminator).map_err(Error::io)
+    }
+}
+
+impl<'a, W> ser::SerializeStruct for &'a mut Serializer<W>
+where
+    W: io::Write,
+{
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        value.serialize(&mut **self)
+    }
+
+    // Standard ending without any null terminator
+    fn end(self) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -315,25 +335,6 @@ where
         unimplemented!()
     }
 
-    fn end(self) -> Result<()> {
-        unimplemented!()
-    }
-}
-impl<'a, W> ser::SerializeStruct for &'a mut Serializer<W>
-where
-    W: io::Write,
-{
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_field<T>(&mut self, _key: &'static str, _value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
-        unimplemented!()
-    }
-
-    // Standard ending without any null terminator
     fn end(self) -> Result<()> {
         unimplemented!()
     }
