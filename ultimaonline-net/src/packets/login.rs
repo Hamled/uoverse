@@ -23,7 +23,7 @@ impl Serialize for LoginRejection {
         S: Serializer,
     {
         let mut s = serializer.serialize_tuple(2)?;
-        s.serialize_element(&[0x82u8][..])?;
+        s.serialize_element(&0x82u8)?;
         s.serialize_element(&self.reason)?;
         s.end()
     }
