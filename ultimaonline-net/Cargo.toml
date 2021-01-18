@@ -7,4 +7,5 @@ description = "Library for the Ultima Online network protocol."
 
 [dependencies]
 nom = "6.0.1"
-serde = "1.0.119"
+serde = { version = "1.0.119", features = ["derive"] }
+serde_repr = "0.1.6"
