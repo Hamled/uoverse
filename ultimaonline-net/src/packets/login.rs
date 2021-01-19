@@ -1,4 +1,4 @@
-use serde::ser::{Serialize, SerializeTuple, Serializer};
+use macros::packet;
 use serde_repr::Serialize_repr;
 
 #[allow(dead_code)]
@@ -13,20 +13,9 @@ enum LoginRejectionReason {
     BadComm = 255,
 }
 
+#[packet(id = 0x82)]
 struct LoginRejection {
     reason: LoginRejectionReason,
-}
-
-impl Serialize for LoginRejection {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = serializer.serialize_tuple(2)?;
-        s.serialize_element(&0x82u8)?;
-        s.serialize_element(&self.reason)?;
-        s.end()
-    }
 }
 
 #[cfg(test)]
@@ -37,7 +26,7 @@ mod tests {
     fn serialize_login_rejection() {
         let rej_invalid = [0x82u8, 0];
 
-        let mut packet: Vec<u8> = Vec::new();
+        let mut packet = Vec::<u8>::new();
 
         to_writer(
             &mut packet,

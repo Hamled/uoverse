@@ -2,6 +2,8 @@ pub mod error;
 pub mod packets;
 pub mod ser;
 
+extern crate ultimaonline_net_macros as macros;
+
 #[cfg(test)]
 mod tests {
     #[test]
