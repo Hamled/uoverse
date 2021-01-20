@@ -12,6 +12,20 @@ where
 }
 
 #[inline]
+pub fn to_size<'a, T>(value: &'a T) -> Result<usize>
+where
+    T: Serialize,
+{
+    let mut serializer = Serializer::<Vec<u8>> {
+        size: 0,
+        writer: None,
+    };
+    value.serialize(&mut serializer)?;
+
+    Ok(serializer.size)
+}
+
+#[inline]
 pub fn to_writer<'a, W, T>(writer: &'a mut W, value: &'a T) -> Result<()>
 where
     W: io::Write,
