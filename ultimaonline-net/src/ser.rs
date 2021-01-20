@@ -97,6 +97,17 @@ where
         }
     }
 
+    fn serialize_none(self) -> Result<()> {
+        Ok(())
+    }
+
+    fn serialize_some<T>(self, v: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        v.serialize(self)
+    }
+
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         if let Some(len) = len {
             if len > u16::MAX as usize {
@@ -129,17 +140,6 @@ where
     // Lots of stuff unimplemented as it's not needed
 
     fn serialize_str(self, _: &str) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn serialize_none(self) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn serialize_some<T>(self, _: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
         unimplemented!()
     }
 

@@ -1,3 +1,4 @@
+use super::{Packet, ToPacket};
 use crate::types::FixedStr;
 use macros::packet;
 use serde::Serialize;
@@ -52,7 +53,8 @@ mod tests {
                 &mut packet,
                 &LoginRejection {
                     reason: LoginRejectionReason::Invalid,
-                },
+                }
+                .to_packet(),
             )
             .expect("Failed to write packet");
 
@@ -90,7 +92,8 @@ mod tests {
                 &ServerList {
                     flags: 0x5D,
                     list: servers,
-                },
+                }
+                .to_packet(),
             )
             .expect("Failed to write packet");
 

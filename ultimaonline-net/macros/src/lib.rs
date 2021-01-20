@@ -68,7 +68,7 @@ fn packet_size_calc(item: &ItemStruct) -> proc_macro2::TokenStream {
 
     let output = quote! {
         let prefix_size = 1 + 2; // packet id and size field
-        let size = (prefix_size + #(#terms)+*) as u16;
+        let size = prefix_size + #(#terms)+*;
     };
 
     output.into()
@@ -91,53 +91,27 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 
     // If this packet has a variable size, generate code to
     // calculate the size and include it when serializing
-    let (size_field_def, size_field, size_calc) = match args.var_size {
+    let (size_field, size_calc) = match args.var_size {
         true => (
-            quote! {size: u16,},
-            quote! {size,},
+            quote! {size: Some(size as u16),},
             packet_size_calc(&main_struct),
         ),
-        false => (quote! {}, quote! {}, quote! {}),
+        false => (quote! {size: None,}, quote! {}),
     };
-
-    let impl_struct = ItemStruct {
-        vis: parse_quote! { pub(self) },
-        ident: format_ident!("{}PacketImpl", main_ident),
-        ..main_struct.clone()
-    };
-    let impl_ident = &impl_struct.ident;
-
-    let packet_ident = format_ident!("{}Packet", main_ident);
 
     let output = quote! {
-        #[allow(dead_code)]
+        #[derive(::serde::Serialize)]
         #main_struct
 
-        #[derive(::serde::Serialize)]
-        #impl_struct
-
-        #[derive(::serde::Serialize)]
-        struct #packet_ident<'a> {
-            id: u8,
-            #size_field_def
-            contents: &'a #impl_ident,
-        }
-
-        impl ::serde::ser::Serialize for #main_ident {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: ::serde::ser::Serializer,
-            {
+        impl<'a> ToPacket<'a> for #main_ident {
+            fn to_packet(&'a self) -> Packet<'a, Self> {
                 #size_calc
 
-                let impl_ptr = self as *const #main_ident as *const #impl_ident;
-                let packet = #packet_ident {
+                Packet {
                     id: #packet_id,
                     #size_field
-                    contents: unsafe { &*impl_ptr },
-                };
-
-                packet.serialize(serializer)
+                    contents: self,
+                }
             }
         }
     };
