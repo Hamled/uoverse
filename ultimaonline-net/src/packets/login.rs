@@ -6,7 +6,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
-enum LoginRejectionReason {
+pub enum LoginRejectionReason {
     Invalid = 0,
     InUse = 1,
     Blocked = 2,
@@ -17,24 +17,24 @@ enum LoginRejectionReason {
 
 #[packet(id = 0x82)]
 #[derive(Debug, PartialEq)]
-struct LoginRejection {
-    reason: LoginRejectionReason,
+pub struct LoginRejection {
+    pub reason: LoginRejectionReason,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct ServerInfo {
-    index: u16,
-    name: FixedStr<32>,
-    fullness: u8,
-    timezone: u8,
-    ip_address: u32,
+pub struct ServerInfo {
+    pub index: u16,
+    pub name: FixedStr<32>,
+    pub fullness: u8,
+    pub timezone: u8,
+    pub ip_address: u32,
 }
 
 #[packet(id = 0xA8, var_size = true)]
 #[derive(Debug, PartialEq)]
-struct ServerList {
-    flags: u8,
-    list: Vec<ServerInfo>,
+pub struct ServerList {
+    pub flags: u8,
+    pub list: Vec<ServerInfo>,
 }
 
 #[cfg(test)]
