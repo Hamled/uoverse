@@ -9,6 +9,15 @@ pub struct Packet<'a, T> {
     contents: &'a T,
 }
 
+impl<'a, T> Packet<'a, T>
+where
+    T: Serialize,
+{
+    pub fn to_writer<W: std::io::Write>(&'a self, writer: &mut W) -> Result<()> {
+        crate::ser::to_writer(writer, self)
+    }
+}
+
 pub trait ToPacket<'a>
 where
     Self: Sized,
