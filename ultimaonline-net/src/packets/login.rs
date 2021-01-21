@@ -27,6 +27,13 @@ pub struct ClientHello {
     pub version: ClientVersion,
 }
 
+#[packet(id = 0x80)]
+pub struct AccountLogin {
+    pub username: FixedStr<30>,
+    pub password: FixedStr<30>,
+    unknown_3c: u8,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
