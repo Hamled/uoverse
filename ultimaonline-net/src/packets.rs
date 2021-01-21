@@ -1,3 +1,4 @@
+use crate::error::Result;
 use serde::Serialize;
 pub mod login;
 
@@ -13,4 +14,11 @@ where
     Self: Sized,
 {
     fn to_packet(&'a self) -> Packet<'a, Self>;
+}
+
+trait FromPacketData
+where
+    Self: Sized,
+{
+    fn from_packet_data<R: std::io::Read>(reader: &mut R) -> Result<Self>;
 }
