@@ -5,4 +5,5 @@ authors = ["Charles Ellis <hamled@hamled.dev>"]
 edition = "2018"
 
 [dependencies]
+rand = "0.8.2"
 ultimaonline-net = { version = "0.1.0", path = "../ultimaonline-net" }
