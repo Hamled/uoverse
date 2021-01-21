@@ -27,7 +27,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 
     // If this packet has a variable size, generate code to
     // calculate the size and include it when serializing
-    let (size_field, size_calc) = match args.var_size {
+    let (size_field, size_calc, size_check) = match args.var_size {
         true => (
             quote! {size: Some(size as u16),},
             quote! {
@@ -36,23 +36,44 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
                            ::core::mem::size_of::<u16>() + // packet size
                            size;
             },
+            quote! {
+                // TODO: Actually check this length value
+                let _ = reader.read_u16::<BigEndian>().map_err(Error::io)?;
+            },
         ),
-        false => (quote! {size: None,}, quote! {}),
+        false => (quote! {size: None,}, quote! {}, quote! {}),
     };
 
     let output = quote! {
-        #[derive(::serde::Serialize)]
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         #main_struct
 
-        impl<'a> ToPacket<'a> for #main_ident {
-            fn to_packet(&'a self) -> Packet<'a, Self> {
+        impl<'a> crate::packets::ToPacket<'a> for #main_ident {
+            fn to_packet(&'a self) -> crate::packets::Packet<'a, Self> {
                 #size_calc
 
-                Packet {
+                crate::packets::Packet {
                     id: #packet_id,
                     #size_field
                     contents: self,
                 }
+            }
+        }
+
+        impl crate::packets::FromPacketData for #main_ident {
+            fn from_packet_data<R: ::std::io::Read>(reader: &mut R) -> crate::error::Result<Self> {
+                use ::byteorder::{ReadBytesExt, BigEndian};
+                use crate::error::Error;
+
+                // Parse out the packet header
+                let packet_id = reader.read_u8().map_err(Error::io)?;
+                if(packet_id != #packet_id) {
+                    return Err(Error::Data);
+                }
+
+                #size_check
+
+                crate::de::from_reader(reader)
             }
         }
     };
