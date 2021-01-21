@@ -1,6 +1,8 @@
-use serde::ser::{Error, Serialize, Serializer};
+use serde::de::{self, Deserialize, Deserializer, SeqAccess, Visitor};
+use serde::ser::{self, Serialize, Serializer};
+use std::fmt;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FixedStr<const LEN: usize> {
     str: [u8; LEN],
 }
@@ -11,7 +13,9 @@ impl<const LEN: usize> Serialize for FixedStr<LEN> {
         S: Serializer,
     {
         if LEN > u16::MAX as usize {
-            Err(Error::custom("FixedStr must have a length <= u16::MAX"))
+            Err(ser::Error::custom(
+                "FixedStr must have a length <= u16::MAX",
+            ))
         } else {
             serializer.serialize_bytes(&self.str)
         }
@@ -31,5 +35,45 @@ impl<const LEN: usize> From<&str> for FixedStr<LEN> {
         fixed.str[..len].copy_from_slice(&string.as_bytes()[..len]);
 
         fixed
+    }
+}
+
+struct FixedStrVisitor<const LEN: usize>;
+
+impl<'de, const LEN: usize> Visitor<'de> for FixedStrVisitor<LEN> {
+    type Value = FixedStr<LEN>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_fmt(format_args!("a fixed-length string of {} bytes", LEN))
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut val: FixedStr<LEN> = Default::default();
+
+        for i in 0..seq.size_hint().unwrap_or(LEN) {
+            let by = seq.next_element::<u8>()?;
+            match by {
+                Some(by) => val.str[i] = by,
+                None => {
+                    return Err(de::Error::custom(
+                        "Missing 1 or more elements from FixedStr",
+                    ))
+                }
+            }
+        }
+
+        Ok(val)
+    }
+}
+
+impl<'de, const LEN: usize> Deserialize<'de> for FixedStr<LEN> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_tuple(LEN, FixedStrVisitor)
     }
 }

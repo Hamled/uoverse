@@ -1,4 +1,4 @@
-use serde::ser;
+use serde::{de, ser};
 use std::fmt;
 use std::io;
 
@@ -12,6 +12,12 @@ pub enum Error {
 }
 
 impl ser::Error for Error {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Error::Message(msg.to_string())
+    }
+}
+
+impl de::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
         Error::Message(msg.to_string())
     }
