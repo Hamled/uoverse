@@ -3,6 +3,30 @@ use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+#[derive(Serialize, Deserialize)]
+pub struct ClientVersion {
+    major: u32,
+    minor: u32,
+    revision: u32,
+    patch: u32,
+}
+
+impl std::fmt::Display for ClientVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}.{}",
+            self.major, self.minor, self.revision, self.patch
+        )
+    }
+}
+
+#[packet(id = 0xEF)]
+pub struct ClientHello {
+    pub seed: u32,
+    pub version: ClientVersion,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
