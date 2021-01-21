@@ -306,4 +306,8 @@ where
     {
         unimplemented!();
     }
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }

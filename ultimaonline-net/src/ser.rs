@@ -266,6 +266,10 @@ where
     ) -> Result<Self::SerializeStruct> {
         unimplemented!()
     }
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 impl<'a, 'b, W> ser::SerializeSeq for &'a mut Serializer<'b, W>
