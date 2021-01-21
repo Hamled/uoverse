@@ -2,6 +2,7 @@ use crate::types::FixedStr;
 use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::net::{Ipv4Addr, SocketAddrV4};
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientVersion {
@@ -58,7 +59,7 @@ pub struct ServerInfo {
     pub name: FixedStr<32>,
     pub fullness: u8,
     pub timezone: u8,
-    pub ip_address: u32,
+    pub ip_address: Ipv4Addr,
 }
 
 #[packet(id = 0xA8, var_size = true)]
@@ -71,6 +72,13 @@ pub struct ServerList {
 #[packet(id = 0xA0)]
 pub struct ServerSelection {
     pub index: u16,
+}
+
+#[packet(id = 0x8C)]
+#[derive(Debug, PartialEq)]
+pub struct GameServerHandoff {
+    pub socket: SocketAddrV4,
+    pub ticket: u32,
 }
 
 #[cfg(test)]
@@ -123,14 +131,14 @@ mod tests {
                     name: "Server 1".into(),
                     fullness: 10,
                     timezone: 3,
-                    ip_address: 0x12345678,
+                    ip_address: "127.0.3.1".parse().unwrap(),
                 },
                 ServerInfo {
                     index: 1,
                     name: "Another Server".into(),
                     fullness: 39,
                     timezone: 9,
-                    ip_address: 0x09080706,
+                    ip_address: "127.0.3.2".parse().unwrap(),
                 },
             ]
         }
@@ -165,6 +173,26 @@ mod tests {
             let parsed = ServerList::from_packet_data(&mut input).expect("Failed to parse packet");
 
             assert_eq!(parsed, server_list);
+        }
+    }
+
+    mod game_server_handoff {
+        use super::*;
+
+        #[test]
+        fn round_trip() {
+            let handoff = GameServerHandoff {
+                socket: "127.0.4.3:8734".parse().unwrap(),
+                ticket: 0x35701845,
+            };
+
+            let mut packet = Vec::<u8>::new();
+            handoff.to_packet().to_writer(&mut packet);
+
+            let parsed = GameServerHandoff::from_packet_data(&mut packet.as_slice())
+                .expect("Failed to parse packet");
+
+            assert_eq!(parsed, handoff);
         }
     }
 }
