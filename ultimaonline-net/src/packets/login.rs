@@ -68,6 +68,11 @@ pub struct ServerList {
     pub list: Vec<ServerInfo>,
 }
 
+#[packet(id = 0xA0)]
+pub struct ServerSelection {
+    pub index: u16,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
