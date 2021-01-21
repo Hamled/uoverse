@@ -1,5 +1,6 @@
 use serde::de::{self, Deserialize, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, Serializer};
+use std::convert::TryFrom;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,6 +36,14 @@ impl<const LEN: usize> From<&str> for FixedStr<LEN> {
         fixed.str[..len].copy_from_slice(&string.as_bytes()[..len]);
 
         fixed
+    }
+}
+
+impl<'a, const LEN: usize> TryFrom<&'a FixedStr<LEN>> for &'a str {
+    type Error = std::str::Utf8Error;
+
+    fn try_from(fixed: &'a FixedStr<LEN>) -> Result<Self, Self::Error> {
+        std::str::from_utf8(&fixed.str)
     }
 }
 
