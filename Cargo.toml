@@ -3,5 +3,6 @@
 members = [
     "ultimaonline-net",
     "ultimaonline-net/macros",
-    "uoverse-server"
+    "uoverse-server",
+    "uoverse-server/macros"
 ]
