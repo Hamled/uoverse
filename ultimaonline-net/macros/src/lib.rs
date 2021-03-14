@@ -48,6 +48,10 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         #main_struct
 
+        impl #main_ident {
+            pub const PACKET_ID: u8 = #packet_id;
+        }
+
         impl<'a> crate::packets::ToPacket<'a> for #main_ident {
             fn to_packet(&'a self) -> crate::packets::Packet<'a, Self> {
                 #size_calc
