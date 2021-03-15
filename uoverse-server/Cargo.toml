@@ -5,8 +5,14 @@ authors = ["Charles Ellis <hamled@hamled.dev>"]
 edition = "2018"
 
 [dependencies]
+bytes = "1"
+futures = "0.3"
 rand = "0.8.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util"] }
+tokio-stream = "0.1"
+tokio-util = { version = "0.6", features = ["codec"]}
 ultimaonline-net = { version = "0.1.0", path = "../ultimaonline-net" }
+uoverse-server-macros = { path = "macros" }
 
 [[bin]]
 name = "login"
