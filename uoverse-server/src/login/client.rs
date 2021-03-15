@@ -7,17 +7,11 @@ use ultimaonline_net::packets::login;
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Sized + Unpin;
 
-pub struct LoginFsm<Io>
-where
-    Io: AsyncIo,
-{
+pub struct LoginFsm<Io: AsyncIo> {
     states: States<Io>,
 }
 
-impl<Io> LoginFsm<Io>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> LoginFsm<Io> {
     pub fn new(io: Io) -> Self {
         LoginFsm {
             states: States::Connected(FsmState {
@@ -44,10 +38,7 @@ where
     }
 }
 
-enum States<Io>
-where
-    Io: AsyncIo,
-{
+enum States<Io: AsyncIo> {
     Disconnect(FsmState<Io, Disconnect>),
     Connected(FsmState<Io, Connected>),
     Hello(FsmState<Io, Hello>),
@@ -62,10 +53,7 @@ struct FsmState<Io: AsyncIo, State> {
 struct Disconnect;
 
 struct Connected;
-impl<Io> FsmState<Io, Connected>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> FsmState<Io, Connected> {
     async fn step(mut self) -> States<Io> {
         let mut codec = (codecs::Connected {}).framed(&mut self.io);
 
@@ -83,10 +71,7 @@ where
         }
     }
 }
-impl<Io> From<FsmState<Io, Connected>> for FsmState<Io, Disconnect>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> From<FsmState<Io, Connected>> for FsmState<Io, Disconnect> {
     fn from(val: FsmState<Io, Connected>) -> FsmState<Io, Disconnect> {
         FsmState {
             io: val.io,
@@ -94,10 +79,7 @@ where
         }
     }
 }
-impl<Io> From<FsmState<Io, Connected>> for FsmState<Io, Hello>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> From<FsmState<Io, Connected>> for FsmState<Io, Hello> {
     fn from(val: FsmState<Io, Connected>) -> FsmState<Io, Hello> {
         FsmState {
             io: val.io,
@@ -107,10 +89,7 @@ where
 }
 
 struct Hello;
-impl<Io> FsmState<Io, Hello>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> FsmState<Io, Hello> {
     async fn step(mut self) -> States<Io> {
         let mut codec = (codecs::Hello {}).framed(&mut self.io);
 
@@ -138,10 +117,7 @@ where
         }
     }
 }
-impl<Io> From<FsmState<Io, Hello>> for FsmState<Io, Disconnect>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> From<FsmState<Io, Hello>> for FsmState<Io, Disconnect> {
     fn from(val: FsmState<Io, Hello>) -> FsmState<Io, Disconnect> {
         FsmState {
             io: val.io,
@@ -154,10 +130,7 @@ struct Login {
     username: String,
     password: String,
 }
-impl<Io> FsmState<Io, Login>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> FsmState<Io, Login> {
     async fn step(mut self) -> States<Io> {
         let mut codec = FramedWrite::new(&mut self.io, codecs::Login {});
         use codecs::LoginFrameSend::*;
@@ -172,10 +145,7 @@ where
         States::Disconnect(self.into())
     }
 }
-impl<Io> From<FsmState<Io, Login>> for FsmState<Io, Disconnect>
-where
-    Io: AsyncIo,
-{
+impl<Io: AsyncIo> From<FsmState<Io, Login>> for FsmState<Io, Disconnect> {
     fn from(val: FsmState<Io, Login>) -> FsmState<Io, Disconnect> {
         FsmState {
             io: val.io,
