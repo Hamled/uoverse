@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::StreamExt;
 use tokio_util::codec::Decoder;
@@ -33,6 +34,7 @@ where
 
             self.states = match self.states {
                 Connected(state) => state.step().await,
+                Hello(state) => state.step().await,
                 Disconnect(_) => unreachable!(),
             };
         }
@@ -45,6 +47,7 @@ where
 {
     Disconnect(FsmState<Io, Disconnect>),
     Connected(FsmState<Io, Connected>),
+    Hello(FsmState<Io, Hello>),
 }
 
 struct FsmState<Io: AsyncIo, State> {
@@ -62,16 +65,18 @@ where
     async fn step(mut self) -> States<Io> {
         let mut codec = (codecs::Connected {}).framed(&mut self.io);
 
-        if let Some(Ok(frame)) = codec.next().await {
-            match frame {
-                codecs::ConnectedFrameRecv::ClientHello(hello) => println!(
+        use codecs::ConnectedFrameRecv::*;
+        match codec.next().await {
+            Some(Ok(ClientHello(hello))) => {
+                println!(
                     "Got client hello. Seed: {}, Version: {}",
                     hello.seed, hello.version
-                ),
-            }
-        }
+                );
 
-        States::Disconnect(self.into())
+                States::Hello(self.into())
+            }
+            _ => States::Disconnect(self.into()),
+        }
     }
 }
 impl<Io> From<FsmState<Io, Connected>> for FsmState<Io, Disconnect>
@@ -79,6 +84,57 @@ where
     Io: AsyncIo,
 {
     fn from(val: FsmState<Io, Connected>) -> FsmState<Io, Disconnect> {
+        FsmState {
+            io: val.io,
+            state: Disconnect {},
+        }
+    }
+}
+impl<Io> From<FsmState<Io, Connected>> for FsmState<Io, Hello>
+where
+    Io: AsyncIo,
+{
+    fn from(val: FsmState<Io, Connected>) -> FsmState<Io, Hello> {
+        FsmState {
+            io: val.io,
+            state: Hello {},
+        }
+    }
+}
+
+struct Hello;
+impl<Io> FsmState<Io, Hello>
+where
+    Io: AsyncIo,
+{
+    async fn step(mut self) -> States<Io> {
+        let mut codec = (codecs::Hello {}).framed(&mut self.io);
+
+        use codecs::HelloFrameRecv::*;
+        match codec.next().await {
+            Some(Ok(AccountLogin(login))) => {
+                let username = TryInto::<&str>::try_into(&login.username)
+                    .expect("Invalid UTF-8 in username")
+                    .to_string();
+                let password = TryInto::<&str>::try_into(&login.password)
+                    .expect("Invalid UTF-8 in password")
+                    .to_string();
+                println!(
+                    "Got account login. Username: {}, Password: {}",
+                    username, password
+                );
+
+                States::Disconnect(self.into())
+            }
+            _ => States::Disconnect(self.into()),
+        }
+    }
+}
+impl<Io> From<FsmState<Io, Hello>> for FsmState<Io, Disconnect>
+where
+    Io: AsyncIo,
+{
+    fn from(val: FsmState<Io, Hello>) -> FsmState<Io, Disconnect> {
         FsmState {
             io: val.io,
             state: Disconnect {},
@@ -95,6 +151,14 @@ mod codecs {
         send [],
         recv [
             login::ClientHello,
+        ]
+    }
+
+    define_codec! {
+        pub Hello,
+        send [],
+        recv [
+            login::AccountLogin,
         ]
     }
 }
