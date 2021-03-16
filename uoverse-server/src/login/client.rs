@@ -32,6 +32,8 @@ impl<Io: AsyncIo> LoginFsm<Io> {
                 Connected(state) => state.step().await,
                 Hello(state) => state.step().await,
                 Login(state) => state.step().await,
+                ServerSelect(state) => state.step().await,
+                Handoff(state) => state.step().await,
                 Disconnect(_) => unreachable!(),
             };
         }
@@ -43,6 +45,8 @@ enum States<Io: AsyncIo> {
     Connected(FsmState<Io, Connected>),
     Hello(FsmState<Io, Hello>),
     Login(FsmState<Io, Login>),
+    ServerSelect(FsmState<Io, ServerSelect>),
+    Handoff(FsmState<Io, Handoff>),
 }
 
 struct FsmState<Io: AsyncIo, State> {
@@ -136,17 +140,97 @@ impl<Io: AsyncIo> FsmState<Io, Login> {
         use codecs::LoginFrameSend::*;
 
         // TODO: Authenticate user and authorize for logging in
+        /*
         codec
             .send(LoginRejection(login::LoginRejection {
                 reason: login::LoginRejectionReason::Invalid,
+            }))
+            .await;
+        */
+
+        codec
+            .send(ServerList(login::ServerList {
+                flags: 0x5D,
+                list: vec![login::ServerInfo {
+                    index: 0,
+                    name: "Test Server".into(),
+                    fullness: 0,
+                    timezone: 0,
+                    ip_address: "127.0.0.1".parse().unwrap(),
+                }],
+            }))
+            .await;
+
+        States::ServerSelect(self.into())
+    }
+}
+impl<Io: AsyncIo> From<FsmState<Io, Login>> for FsmState<Io, Disconnect> {
+    fn from(val: FsmState<Io, Login>) -> FsmState<Io, Disconnect> {
+        FsmState {
+            io: val.io,
+            state: Disconnect {},
+        }
+    }
+}
+impl<Io: AsyncIo> From<FsmState<Io, Login>> for FsmState<Io, ServerSelect> {
+    fn from(val: FsmState<Io, Login>) -> FsmState<Io, ServerSelect> {
+        FsmState {
+            io: val.io,
+            state: ServerSelect {},
+        }
+    }
+}
+
+struct ServerSelect;
+impl<Io: AsyncIo> FsmState<Io, ServerSelect> {
+    async fn step(mut self) -> States<Io> {
+        let mut codec = (codecs::ServerSelect {}).framed(&mut self.io);
+
+        use codecs::ServerSelectFrameRecv::*;
+        match codec.next().await {
+            Some(Ok(ServerSelection(login::ServerSelection { index }))) => {
+                println!("Got server selection: {}", index);
+                States::Handoff(self.into())
+            }
+            _ => States::Disconnect(self.into()),
+        }
+    }
+}
+impl<Io: AsyncIo> From<FsmState<Io, ServerSelect>> for FsmState<Io, Disconnect> {
+    fn from(val: FsmState<Io, ServerSelect>) -> FsmState<Io, Disconnect> {
+        FsmState {
+            io: val.io,
+            state: Disconnect {},
+        }
+    }
+}
+impl<Io: AsyncIo> From<FsmState<Io, ServerSelect>> for FsmState<Io, Handoff> {
+    fn from(val: FsmState<Io, ServerSelect>) -> FsmState<Io, Handoff> {
+        FsmState {
+            io: val.io,
+            state: Handoff {},
+        }
+    }
+}
+
+struct Handoff;
+impl<Io: AsyncIo> FsmState<Io, Handoff> {
+    async fn step(mut self) -> States<Io> {
+        let mut codec = FramedWrite::new(&mut self.io, codecs::Handoff {});
+        use codecs::HandoffFrameSend::*;
+
+        codec
+            .send(GameServerHandoff(login::GameServerHandoff {
+                socket: "127.0.0.1:2594".parse().unwrap(),
+                ticket: rand::random::<u32>(),
             }))
             .await;
 
         States::Disconnect(self.into())
     }
 }
-impl<Io: AsyncIo> From<FsmState<Io, Login>> for FsmState<Io, Disconnect> {
-    fn from(val: FsmState<Io, Login>) -> FsmState<Io, Disconnect> {
+impl<Io: AsyncIo> From<FsmState<Io, Handoff>> for FsmState<Io, Disconnect> {
+    fn from(val: FsmState<Io, Handoff>) -> FsmState<Io, Disconnect> {
         FsmState {
             io: val.io,
             state: Disconnect {},
@@ -179,6 +263,22 @@ mod codecs {
         send [
             login::LoginRejection,
             login::ServerList,
+        ],
+        recv []
+    }
+
+    define_codec! {
+        pub ServerSelect,
+        send [],
+        recv [
+            login::ServerSelection,
+        ]
+    }
+
+    define_codec! {
+        pub Handoff,
+        send [
+            login::GameServerHandoff,
         ],
         recv []
     }
