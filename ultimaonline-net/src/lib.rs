@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod de;
 pub mod error;
 pub mod packets;
