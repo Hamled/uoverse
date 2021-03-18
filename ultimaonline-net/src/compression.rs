@@ -47,10 +47,11 @@ pub mod Huffman {
 
             bits_written += len;
 
-            if len >= rem_bits {
+            while len >= rem_bits {
                 compressed.push(0u8);
-                let bits = bits & ((1 << (len - rem_bits)) - 1);
+                let bits = bits & !((1 << (len - rem_bits)) - 1);
                 let bits = bits >> (len - rem_bits);
+
                 compressed[bytes_written] |= bits as u8;
 
                 len -= rem_bits;
@@ -93,6 +94,23 @@ mod tests {
         assert_eq!(
             output,
             vec![0b1111_1100, 0b0101_1111, 0b0110_1001, 0b1010_0000]
+        );
+    }
+
+    #[test]
+    fn compress_packet_header() {
+        let input = [0xa9u8, 0x04, 0xd2, 0x07];
+        let output = Huffman::compress(&input[..]);
+
+        assert_eq!(
+            output,
+            vec![
+                0b1000_0001, // 0x81
+                0b0111_1010, // 0x7A
+                0b1101_1100, // 0xDC
+                0b0000_1100, // 0x0C
+                0b1011_0100, // 0xB4
+            ]
         );
     }
 }
