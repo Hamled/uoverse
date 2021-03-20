@@ -570,6 +570,7 @@ dependencies = [
  "bytes",
  "futures",
  "rand",
+ "serde",
  "tokio",
  "tokio-stream",
  "tokio-util",
