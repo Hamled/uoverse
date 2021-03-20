@@ -67,43 +67,43 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
     let vis = codec_def.visibility;
     let codec_name = codec_def.name;
 
-    fn frame<'a>(vis: &Visibility, name: &Ident, pkts: &Vec<Path>) -> proc_macro2::TokenStream {
-        let variants = pkts.iter().map(|p| &p.segments.last().unwrap().ident);
-        let pkts = pkts.iter();
-
-        quote! {
-            #vis enum #name {
+    let decoder = if !codec_def.recv_pkts.is_empty() {
+        let frame_name = Ident::new(&format!("{}Frame", codec_name), codec_name.span());
+        let pkts = codec_def.recv_pkts.iter();
+        let variants = codec_def
+            .recv_pkts
+            .iter()
+            .map(|p| &p.segments.last().unwrap().ident);
+        let frame = quote! {
+            pub enum #frame_name {
                 #( #variants(#pkts) ),*
             }
-        }
-    }
+        };
 
-    let decoder = if !codec_def.recv_pkts.is_empty() {
-        let frame_name = Ident::new(&format!("{}FrameRecv", codec_name), codec_name.span());
-        let frame = frame(&vis, &frame_name, &codec_def.recv_pkts);
-        let decoder_impl = {
-            let pkts = codec_def.recv_pkts.iter();
-            let names = pkts.clone().map(|p| &p.segments.last().unwrap().ident);
-            quote! {
-                impl ::tokio_util::codec::Decoder for #codec_name {
-                    type Item = #frame_name;
-                    type Error = ::ultimaonline_net::error::Error;
+        let pkts = codec_def.recv_pkts.iter();
+        let names = codec_def
+            .recv_pkts
+            .iter()
+            .map(|p| &p.segments.last().unwrap().ident);
+        let decoder_impl = quote! {
+            impl ::tokio_util::codec::Decoder for #codec_name {
+                type Item = #frame_name;
+                type Error = ::ultimaonline_net::error::Error;
 
-                    fn decode(&mut self, src: &mut ::bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-                        use ::bytes::Buf;
-                        use ::ultimaonline_net::packets::FromPacketData;
-                        use #frame_name::*;
+                fn decode(&mut self, src: &mut ::bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+                    use ::bytes::Buf;
+                    use ::ultimaonline_net::packets::FromPacketData;
+                    use #frame_name::*;
 
-                        // Peek at the first byte
-                        if(src.len() < 1) { return Ok(None); }
-                        let packet_id = src[0];
+                    // Peek at the first byte
+                    if(src.len() < 1) { return Ok(None); }
+                    let packet_id = src[0];
 
-                        // match that to the appropriate packet, or error if none matches
+                    // match that to the appropriate packet, or error if none matches
 
-                        match packet_id {
-                            #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
-                            _ => Err(::ultimaonline_net::error::Error::Data),
-                        }
+                    match packet_id {
+                        #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+                        _ => Err(::ultimaonline_net::error::Error::Data),
                     }
                 }
             }
@@ -118,34 +118,27 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
     };
 
     let encoder = if !codec_def.send_pkts.is_empty() {
-        let frame_name = Ident::new(&format!("{}FrameSend", codec_name), codec_name.span());
-        let frame = frame(&vis, &frame_name, &codec_def.send_pkts);
-        let encoder_impl = {
-            let pkts = codec_def.send_pkts.iter();
-            let names = pkts.clone().map(|p| &p.segments.last().unwrap().ident);
-            quote! {
-                impl ::tokio_util::codec::Encoder<#frame_name> for #codec_name {
-                    type Error = ::ultimaonline_net::error::Error;
+        let trait_name = Ident::new(&format!("{}Encode", codec_name), codec_name.span());
+        let pkts = codec_def.send_pkts.iter();
+        quote! {
+            #vis trait #trait_name {}
 
-                    fn encode(&mut self, item: #frame_name, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
-                        use ::bytes::BufMut;
-                        use ::ultimaonline_net::packets::ToPacket;
-                        use #frame_name::*;
+            #( impl #trait_name for #pkts {} )*
 
-                        match item {
-                            #( #names(pkt) => {
-                                pkt.to_packet().to_writer(&mut dst.writer())?;
-                            }),*,
-                        };
-                        Ok(())
-                    }
+            impl<'a, P> ::tokio_util::codec::Encoder<&'a P> for #codec_name
+            where
+                P: #trait_name + ::ultimaonline_net::packets::ToPacket<'a> + ::serde::ser::Serialize
+            {
+                type Error = ::ultimaonline_net::error::Error;
+
+                fn encode(&mut self, pkt: &'a P, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
+                    use ::bytes::BufMut;
+                    use ::ultimaonline_net::packets::ToPacket;
+
+                    pkt.to_packet().to_writer(&mut dst.writer())?;
+                    Ok(())
                 }
             }
-        };
-
-        quote! {
-            #frame
-            #encoder_impl
         }
     } else {
         quote! {}
