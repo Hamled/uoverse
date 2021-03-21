@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::{de, de::Visitor, Deserialize};
-use std::io;
+use std::{io, str};
 
 pub struct Deserializer<'a, R>
 where
@@ -133,6 +133,65 @@ where
         visitor.visit_f64(self.read_f64()?)
     }
 
+    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!();
+    }
+
+    fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!();
+    }
+
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        // TODO: Make a zero-copy version of this if possible
+        let mut buffer = vec![];
+        loop {
+            let byte = self.reader.read_u8().map_err(Error::io)?;
+            match byte {
+                0 => break,
+                n => buffer.push(n),
+            }
+        }
+
+        let s = str::from_utf8(&buffer).map_err(|_| Error::Data)?;
+        // We don't support UTF-8
+        if !s.is_ascii() {
+            return Err(Error::Data);
+        }
+
+        visitor.visit_str(s)
+    }
+
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let mut buffer = vec![];
+        loop {
+            let byte = self.reader.read_u8().map_err(Error::io)?;
+            match byte {
+                0 => break,
+                n => buffer.push(n),
+            }
+        }
+
+        let s = String::from_utf8(buffer).map_err(|_| Error::Data)?;
+        // We don't support UTF-8
+        if !s.is_ascii() {
+            return Err(Error::Data);
+        }
+
+        visitor.visit_string(s)
+    }
+
     fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
@@ -193,34 +252,6 @@ where
     // Unimplemented parts of the Serde data model
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_char<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_str<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_string<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
