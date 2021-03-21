@@ -129,6 +129,18 @@ impl<T, const LEN_BITS: usize> Default for List<T, LEN_BITS> {
     }
 }
 
+impl<T, const LEN_BITS: usize> From<Vec<T>> for List<T, LEN_BITS> {
+    fn from(val: Vec<T>) -> Self {
+        Self(val)
+    }
+}
+
+impl<T, const LEN_BITS: usize> From<List<T, LEN_BITS>> for Vec<T> {
+    fn from(val: List<T, LEN_BITS>) -> Self {
+        val.0
+    }
+}
+
 struct ListVisitor<'de, T: Deserialize<'de>, const LEN: usize> {
     element_type: PhantomData<&'de T>,
 }
