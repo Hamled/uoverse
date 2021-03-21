@@ -210,3 +210,40 @@ pub struct CreateCharacter {
     shirt_hue: Hue,
     pants_hue: Hue,
 }
+
+#[packet(id = 0xBD)]
+pub struct VersionReq {
+    pub unknown_00: u16, // 0x0003
+}
+
+#[packet(id = 0xBD)]
+#[derive(Debug, PartialEq)]
+pub struct VersionResp {
+    pub version: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::packets::{FromPacketData, ToPacket};
+    use crate::ser::to_writer;
+
+    mod version_resp {
+        use super::*;
+
+        #[test]
+        fn round_trip() {
+            let version = VersionResp {
+                version: "1.2.3.4".to_string(),
+            };
+
+            let mut packet = Vec::<u8>::new();
+            version.to_packet().to_writer(&mut packet);
+
+            let parsed = VersionResp::from_packet_data(&mut packet.as_slice())
+                .expect("Failed to parse packet");
+
+            assert_eq!(parsed, version);
+        }
+    }
+}
