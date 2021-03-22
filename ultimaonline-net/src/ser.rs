@@ -219,13 +219,14 @@ where
         Ok(self)
     }
 
+    fn serialize_unit_struct(self, _: &'static str) -> Result<()> {
+        // Nothing to be sent
+        Ok(())
+    }
+
     // Lots of stuff unimplemented as it's not needed
 
     fn serialize_unit(self) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn serialize_unit_struct(self, _: &'static str) -> Result<()> {
         unimplemented!()
     }
 
