@@ -1,6 +1,7 @@
 use crate::error::Result;
 use serde::Serialize;
 
+pub mod char_login;
 pub mod char_select;
 pub mod login;
 
