@@ -191,7 +191,7 @@ pub struct CreateCharacter {
     unknown_06: u16, // 0xFFFF
     unknown_08: u8,  // 0x00
 
-    name: FixedStr<30>,
+    pub name: FixedStr<30>,
 
     unknown_27: u16, // 0x0000
 
