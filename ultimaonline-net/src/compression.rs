@@ -1,7 +1,7 @@
-pub mod Huffman {
+pub mod huffman {
     // Coding table for compression taken ModernUO (https://github.com/modernuo/ModernUO)
     #[rustfmt::skip]
-    static comp_table: [(usize, u16); 256] = [
+    static COMP_TABLE: [(usize, u16); 256] = [
         (0x2, 0x000), (0x5, 0x01F), (0x6, 0x022), (0x7, 0x034), (0x7, 0x075), (0x6, 0x028), (0x6, 0x03B), (0x7, 0x032),
         (0x8, 0x0E0), (0x8, 0x062), (0x7, 0x056), (0x8, 0x079), (0x9, 0x19D), (0x8, 0x097), (0x6, 0x02A), (0x7, 0x057),
         (0x8, 0x071), (0x8, 0x05B), (0x9, 0x1CC), (0x8, 0x0A7), (0x7, 0x025), (0x7, 0x04F), (0x8, 0x066), (0x8, 0x07D),
@@ -63,7 +63,7 @@ pub mod Huffman {
         };
 
         for &byte in buf {
-            let (len, bits) = comp_table[byte as usize];
+            let (len, bits) = COMP_TABLE[byte as usize];
             write_bits(len, bits);
         }
 
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn compress_short_sequence() {
         let input = [1u8, 0];
-        let output = Huffman::compress(&input[..]);
+        let output = huffman::compress(&input[..]);
 
         assert_eq!(output, vec![0b1111_1001, 0b1010_0000]);
     }
@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn compress_long_sequence() {
         let input = [1u8, 2, 1, 3];
-        let output = Huffman::compress(&input[..]);
+        let output = huffman::compress(&input[..]);
 
         assert_eq!(
             output,
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn compress_packet_header() {
         let input = [0xa9u8, 0x04, 0xd2, 0x07];
-        let output = Huffman::compress(&input[..]);
+        let output = huffman::compress(&input[..]);
 
         assert_eq!(
             output,
