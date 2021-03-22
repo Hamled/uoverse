@@ -216,7 +216,7 @@ pub struct VersionReq {
     pub unknown_00: u16, // 0x0003
 }
 
-#[packet(id = 0xBD)]
+#[packet(id = 0xBD, var_size = true)]
 #[derive(Debug, PartialEq)]
 pub struct VersionResp {
     pub version: String,
