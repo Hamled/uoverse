@@ -37,7 +37,7 @@ pub mod huffman {
     ];
 
     pub fn compress(buf: &[u8]) -> Vec<u8> {
-        let mut compressed = vec![0u8];
+        let mut compressed = vec![];
         let mut bits_written = 0usize;
 
         let mut write_bits = |len: usize, bits: u16| {
@@ -47,7 +47,14 @@ pub mod huffman {
 
             bits_written += len;
 
-            while len >= rem_bits {
+            // Make space if this is writing to a new byte
+            if rem_bits == 8 {
+                compressed.push(0u8);
+            }
+
+            // Write the entire bit sequence except for the
+            // part that goes onto the final byte
+            while len > rem_bits {
                 compressed.push(0u8);
                 let bits = bits & !((1 << (len - rem_bits)) - 1);
                 let bits = bits >> (len - rem_bits);
@@ -59,6 +66,7 @@ pub mod huffman {
                 rem_bits = 8;
             }
 
+            // Write the portion of the bit sequence for the final byte
             compressed[bytes_written] |= ((bits & ((1 << len) - 1)) << (rem_bits - len)) as u8;
         };
 
@@ -112,5 +120,13 @@ mod tests {
                 0b1011_0100, // 0xB4
             ]
         );
+    }
+
+    #[test]
+    fn with_no_padding_bits() {
+        let input = [0xbdu8, 0x00, 0x03];
+        let output = huffman::compress(&input[..]);
+
+        assert_eq!(output, vec![0b0111_1000, 0b1000_0011, 0b0100_1101]);
     }
 }
