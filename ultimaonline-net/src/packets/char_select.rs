@@ -226,7 +226,6 @@ pub struct VersionResp {
 mod tests {
     use super::*;
     use crate::packets::{FromPacketData, ToPacket};
-    use crate::ser::to_writer;
 
     mod version_resp {
         use super::*;
@@ -238,7 +237,10 @@ mod tests {
             };
 
             let mut packet = Vec::<u8>::new();
-            version.to_packet().to_writer(&mut packet);
+            version
+                .to_packet()
+                .to_writer(&mut packet)
+                .expect("Failed to write packet");
 
             let parsed = VersionResp::from_packet_data(&mut packet.as_slice())
                 .expect("Failed to parse packet");

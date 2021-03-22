@@ -187,7 +187,10 @@ mod tests {
             };
 
             let mut packet = Vec::<u8>::new();
-            handoff.to_packet().to_writer(&mut packet);
+            handoff
+                .to_packet()
+                .to_writer(&mut packet)
+                .expect("Failed to write packet");
 
             let parsed = GameServerHandoff::from_packet_data(&mut packet.as_slice())
                 .expect("Failed to parse packet");
