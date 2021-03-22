@@ -167,7 +167,7 @@ where
         if v.is_ascii() {
             if let Some(writer) = &mut self.writer {
                 writer.write_all(v.as_bytes()).map_err(Error::io)?;
-                writer.write_all(&[0u8][..]).map_err(Error::io)
+                self.end_null()
             } else {
                 Ok(())
             }
