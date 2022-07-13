@@ -212,6 +212,8 @@ impl<'de, T: 'de + Deserialize<'de>, const LEN_BITS: usize> Deserialize<'de> for
 
 pub type Serial = u32;
 
+pub type Name = FixedStr<30>;
+
 #[derive(Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Direction {

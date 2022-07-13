@@ -1,4 +1,4 @@
-use crate::types::{FixedStr, List};
+use crate::types::{FixedStr, List, Name};
 use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -25,7 +25,7 @@ pub struct CharList {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CharInfo {
-    pub name: FixedStr<30>,
+    pub name: Name,
     pub unused: FixedStr<30>,
 }
 
