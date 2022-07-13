@@ -1,5 +1,5 @@
 use serde::de::{self, Deserialize, Deserializer, SeqAccess, Visitor};
-use serde::ser::{self, Serialize, SerializeTuple, Serializer};
+use serde::ser::{self, Serialize, SerializeStruct, Serializer};
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -11,19 +11,14 @@ impl<T: Serialize, const LEN_BITS: usize> Serialize for List<T, LEN_BITS> {
     where
         S: Serializer,
     {
-        // HACK: This is incredibly scuffed, but since serde doesn't really
-        // want to support serializing sequences with different "metadata"
-        // structures, like a length prefix that's of a different size depending
-        // on the list type... we fake like this is a tuple, with the length
-        // as the first element.
-        let len = self.0.len();
-        let mut tuple_ser = serializer.serialize_tuple(len)?; // Len gets ignored here
+        let mut struct_ser = serializer.serialize_struct("List", 2)?;
 
+        let len = self.0.len();
         match LEN_BITS {
-            8 => tuple_ser.serialize_element(&(len as u8))?,
-            16 => tuple_ser.serialize_element(&(len as u16))?,
-            32 => tuple_ser.serialize_element(&(len as u32))?,
-            64 => tuple_ser.serialize_element(&(len as u64))?,
+            8 => struct_ser.serialize_field("length", &(len as u8))?,
+            16 => struct_ser.serialize_field("length", &(len as u16))?,
+            32 => struct_ser.serialize_field("length", &(len as u32))?,
+            64 => struct_ser.serialize_field("length", &(len as u64))?,
             _ => {
                 return Err(ser::Error::custom(
                     "List LEN_BITS must be one of: 8, 16, 32, 64",
@@ -31,10 +26,8 @@ impl<T: Serialize, const LEN_BITS: usize> Serialize for List<T, LEN_BITS> {
             }
         };
 
-        for e in &self.0 {
-            tuple_ser.serialize_element(&e)?;
-        }
-        tuple_ser.end()
+        struct_ser.serialize_field("elements", &self.0)?;
+        struct_ser.end()
     }
 }
 
@@ -97,16 +90,12 @@ impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de>
             )));
         }
 
-        let len = len.unwrap();
-        for _ in 0..len {
-            let e = seq.next_element::<T>()?;
-            match e {
-                Some(e) => val.0.push(e),
-                None => return Err(de::Error::custom("Missing 1 or more elements from List")),
-            }
+        if let Some(elements) = seq.next_element::<Vec<T>>()? {
+            val.0 = elements;
+            Ok(val)
+        } else {
+            Err(de::Error::custom("Missing 1 or more elements from List"))
         }
-
-        Ok(val)
     }
 }
 
@@ -115,8 +104,10 @@ impl<'de, T: 'de + Deserialize<'de>, const LEN_BITS: usize> Deserialize<'de> for
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_tuple(
-            0, // This will be ignored
+        const FIELDS: &'static [&'static str] = &["length", "elements"];
+        deserializer.deserialize_struct(
+            "List",
+            FIELDS,
             ListVisitor {
                 element_type: PhantomData,
             },
