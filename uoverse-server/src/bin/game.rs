@@ -253,6 +253,15 @@ where
 {
     use ultimaonline_net::packets::*;
 
+    state
+        .send(&mobile::MobLightLevel {
+            serial: PLAYER_SERIAL,
+            level: 30,
+        })
+        .await?;
+
+    state.send(&world::WorldLightLevel { level: 30 }).await?;
+
     // TODO: Send lots of other stuff here
     state.send(&char_login::LoginComplete {}).await?;
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;

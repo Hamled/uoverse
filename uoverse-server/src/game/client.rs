@@ -210,6 +210,8 @@ pub mod codecs {
         pub InWorld,
         send [
             char_login::LoginComplete,
+            mobile::MobLightLevel,
+            world::WorldLightLevel,
         ],
         recv []
     }
