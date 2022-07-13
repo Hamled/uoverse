@@ -232,6 +232,19 @@ pub enum Direction {
 
     Running = 0x80,
 }
+
+#[derive(Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum Notoriety {
+    Innocent = 1,
+    Ally,
+    CanBeAttacked,
+    Criminal,
+    Enemy,
+    Murderer,
+    Invulnerable,
+}
+
 #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum CharIdentity {
