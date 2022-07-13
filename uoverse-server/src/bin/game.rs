@@ -309,15 +309,17 @@ where
 
     state
         .send(&mobile::Appearance {
-            serial: 55858,
-            body: 401,
-            x: 3668,
-            y: 2625,
-            z: 0,
-            direction: types::Direction::East,
-            hue: 1003,
-            flags: mobile::EntityFlags::None,
-            notoriety: types::Notoriety::Ally,
+            state: mobile::State {
+                serial: 55858,
+                body: 401,
+                x: 3668,
+                y: 2625,
+                z: 0,
+                direction: types::Direction::East,
+                hue: 1003,
+                flags: mobile::EntityFlags::None,
+                notoriety: types::Notoriety::Ally,
+            },
             items: vec![],
             null_term: 0,
         })

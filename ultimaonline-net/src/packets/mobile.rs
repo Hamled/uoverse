@@ -31,8 +31,8 @@ pub struct Item {
     hue: Hue,
 }
 
-#[packet(id = 0x78, var_size = true)]
-pub struct Appearance {
+#[packet(id = 0x77, var_size = true)]
+pub struct State {
     pub serial: Serial,
     pub body: Graphic,
     pub x: u16,
@@ -42,6 +42,11 @@ pub struct Appearance {
     pub hue: Hue,
     pub flags: EntityFlags,
     pub notoriety: Notoriety,
+}
+
+#[packet(id = 0x78, var_size = true)]
+pub struct Appearance {
+    pub state: State,
     pub items: Vec<Item>,
     pub null_term: u32, // 0x00000000
 }
