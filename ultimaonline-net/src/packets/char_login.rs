@@ -1,8 +1,6 @@
-use crate::types::Direction;
+use crate::types::{Direction, Serial};
 use macros::packet;
 use serde_repr::{Deserialize_repr, Serialize_repr};
-
-pub type Serial = u32;
 
 #[derive(Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
