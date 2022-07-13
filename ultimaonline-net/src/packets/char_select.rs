@@ -1,4 +1,4 @@
-use crate::types::{FixedStr, Graphic, Hue, List, Name};
+use crate::types::{CharIdentity, FixedStr, Graphic, Hue, List, Name};
 use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -63,17 +63,6 @@ pub struct CityInfo {
     pub location: MapLocation,
     pub description: i32,
     pub unknown_15: i32,
-}
-
-#[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
-#[repr(u8)]
-pub enum CharIdentity {
-    HumanMale = 2,
-    HumanFemale,
-    ElfMale,
-    ElfFemale,
-    GargoyleMale,
-    GargoyleFemale,
 }
 
 #[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]

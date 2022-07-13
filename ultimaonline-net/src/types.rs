@@ -232,3 +232,14 @@ pub enum Direction {
 
     Running = 0x80,
 }
+#[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum CharIdentity {
+    HumanMale = 2,
+    HumanFemale,
+    ElfMale,
+    ElfFemale,
+    GargoyleMale,
+    GargoyleFemale,
+}
+
