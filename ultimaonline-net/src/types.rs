@@ -243,3 +243,10 @@ pub enum CharIdentity {
     GargoyleFemale,
 }
 
+#[derive(Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum Race {
+    Human = 1,
+    Elf,
+    Gargoyle,
+}
