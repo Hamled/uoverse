@@ -308,7 +308,8 @@ where
         .await?;
     // TODO: Send lots of other stuff here
     state.send(&char_login::LoginComplete {}).await?;
-    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
-    Ok(())
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    }
 }
