@@ -320,7 +320,38 @@ where
                 flags: mobile::EntityFlags::None,
                 notoriety: types::Notoriety::Ally,
             },
-            items: vec![],
+            items: vec![
+                mobile::Item {
+                    serial: 0x40000001,
+                    type_id: 0x1EFD, // Fancy Shirt
+                    layer: 0x05,     // Shirt
+                    hue: 1837,
+                },
+                mobile::Item {
+                    serial: 0x40000002,
+                    type_id: 0x1539, // Long Pants
+                    layer: 0x04,     // Pants
+                    hue: 1897,
+                },
+                mobile::Item {
+                    serial: 0x40000003,
+                    type_id: 0x170B, // Boots
+                    layer: 0x04,     // Shoes
+                    hue: 1900,
+                },
+                mobile::Item {
+                    serial: 0x40000004,
+                    type_id: 0x1515, // Cloak
+                    layer: 0x14,     // Cloak
+                    hue: 1811,
+                },
+                mobile::Item {
+                    serial: 0x40000005,
+                    type_id: 0x203C, // Long hair
+                    layer: 0x0B,     // Hair
+                    hue: 1111,
+                },
+            ],
             null_term: 0,
         })
         .await?;
@@ -329,6 +360,6 @@ where
     state.send(&char_login::LoginComplete {}).await?;
 
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 }

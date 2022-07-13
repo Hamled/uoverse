@@ -25,10 +25,10 @@ pub struct MobLightLevel {
 
 #[derive(Serialize, Deserialize)]
 pub struct Item {
-    serial: Serial,
-    type_id: u16,
-    layer: u8,
-    hue: Hue,
+    pub serial: Serial,
+    pub type_id: u16,
+    pub layer: u8,
+    pub hue: Hue,
 }
 
 #[packet(id = 0x77, var_size = true)]
