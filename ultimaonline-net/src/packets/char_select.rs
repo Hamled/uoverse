@@ -1,4 +1,4 @@
-use crate::types::{FixedStr, List, Name};
+use crate::types::{FixedStr, Graphic, Hue, List, Name};
 use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -156,10 +156,6 @@ pub enum Profession {
     Samurai,
     Ninja,
 }
-
-// Character appearance types
-type Hue = u16;
-type Graphic = u16;
 
 #[derive(Serialize, Deserialize)]
 pub struct CharAppearance {

@@ -1,4 +1,4 @@
-use crate::types::{Direction, Serial};
+use crate::types::{Direction, Graphic, Serial};
 use macros::packet;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -19,7 +19,7 @@ pub struct LoginConfirmation {
 
     pub unknown_04: u32, // 0x00000000
 
-    pub body_id: i16,
+    pub body: Graphic,
     pub x: i16,
     pub y: i16,
     pub z: i16,

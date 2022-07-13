@@ -214,6 +214,10 @@ pub type Serial = u32;
 
 pub type Name = FixedStr<30>;
 
+// Mobile appearance types
+pub type Hue = u16;
+pub type Graphic = u16;
+
 #[derive(Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Direction {
