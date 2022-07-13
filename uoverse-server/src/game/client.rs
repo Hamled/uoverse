@@ -209,10 +209,11 @@ pub mod codecs {
     define_codec! {
         pub InWorld,
         send [
+            char_login::CharStatus,
             char_login::LoginComplete,
+            mobile::Appearance,
             mobile::MobLightLevel,
             world::WorldLightLevel,
-            char_login::CharStatus,
         ],
         recv []
     }
