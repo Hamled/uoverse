@@ -1,3 +1,4 @@
+use crate::types::Direction;
 use macros::packet;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -12,21 +13,6 @@ pub enum BodyType {
     Animal,
     Human,
     Equipment,
-}
-
-#[derive(Serialize_repr, Deserialize_repr)]
-#[repr(u8)]
-pub enum Direction {
-    North = 0,
-    Right,
-    East,
-    Down,
-    South,
-    Left,
-    West,
-    Up,
-
-    Running = 0x80,
 }
 
 #[packet(id = 0x1B)]

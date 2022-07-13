@@ -1,5 +1,6 @@
 use serde::de::{self, Deserialize, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeTuple, Serializer};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::TryFrom;
 use std::fmt;
 use std::marker::PhantomData;
@@ -207,4 +208,19 @@ impl<'de, T: 'de + Deserialize<'de>, const LEN_BITS: usize> Deserialize<'de> for
             },
         )
     }
+}
+
+#[derive(Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum Direction {
+    North = 0,
+    Right,
+    East,
+    Down,
+    South,
+    Left,
+    West,
+    Up,
+
+    Running = 0x80,
 }
