@@ -4,6 +4,7 @@ use serde::Serialize;
 pub mod char_login;
 pub mod char_select;
 pub mod login;
+pub mod mobile;
 
 #[derive(Serialize)]
 pub struct Packet<'a, T> {
