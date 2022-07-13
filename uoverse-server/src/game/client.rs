@@ -112,7 +112,6 @@ impl<Io: AsyncIo> From<ClientVersion<Io>> for CharSelect<Io> {
 
 pub struct CharLogin<Io: AsyncIo> {
     io: Io,
-    #[allow(dead_code)]
     sequencer: GameSequencer,
 }
 
@@ -136,9 +135,34 @@ impl<Io: AsyncIo> From<CharSelect<Io>> for CharLogin<Io> {
     }
 }
 
+pub struct InWorld<Io: AsyncIo> {
+    io: Io,
+    #[allow(dead_code)]
+    sequencer: GameSequencer,
+}
+
+impl<Io: AsyncIo> InWorld<Io> {
+    pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
+    where
+        P: codecs::InWorldEncode + ToPacket<'a> + ::serde::ser::Serialize,
+    {
+        let mut writer = FramedWrite::new(&mut self.io, CompressionCodec::new(codecs::InWorld {}));
+        writer.send(pkt).await
+    }
+}
+
+impl<Io: AsyncIo> From<CharLogin<Io>> for InWorld<Io> {
+    fn from(val: CharLogin<Io>) -> Self {
+        Self {
+            io: val.io,
+            sequencer: val.sequencer,
+        }
+    }
+}
+
 pub mod codecs {
     use crate::macros::define_codec;
-    use ultimaonline_net::packets::{char_login, char_select};
+    use ultimaonline_net::packets::*;
 
     define_codec! {
         pub Connected,
@@ -178,6 +202,13 @@ pub mod codecs {
         pub CharLogin,
         send [
             char_login::LoginConfirmation,
+        ],
+        recv []
+    }
+
+    define_codec! {
+        pub InWorld,
+        send [
             char_login::LoginComplete,
         ],
         recv []

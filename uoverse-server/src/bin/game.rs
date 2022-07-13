@@ -1,7 +1,11 @@
 use std::convert::TryInto;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use ultimaonline_net::error::{Error, Result};
+use ultimaonline_net::{
+    error::{Error, Result},
+    types::Serial,
+};
+use uoverse_server::game::client::{self, *};
 
 #[tokio::main]
 pub async fn main() {
@@ -21,8 +25,20 @@ pub async fn main() {
 }
 
 async fn process(socket: &mut TcpStream) -> Result<()> {
+    let state = handshake(socket).await?;
+    let state = char_login(state).await?;
+    in_world(state).await?;
+
+    Ok(())
+}
+
+const PLAYER_SERIAL: Serial = 3833;
+
+async fn handshake<Io>(mut socket: Io) -> Result<CharSelect<Io>>
+where
+    Io: AsyncIo,
+{
     use ultimaonline_net::packets::char_select as packets;
-    use uoverse_server::game::client::*;
 
     // Client sends a 4 byte seed value, followed by the initial login packet.
     // The login packet itself includes the same seed value, so we can ignore
@@ -42,7 +58,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
         username, password, login.seed
     );
 
-    let mut state = CharList::<&mut TcpStream>::from(state);
+    let mut state = CharList::<Io>::from(state);
     state
         .send(&packets::Features {
             // Enable all flags except:
@@ -196,7 +212,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
         .send(&packets::VersionReq { unknown_00: 0x0003 })
         .await?;
 
-    let mut state = ClientVersion::<&mut TcpStream>::from(state);
+    let mut state = ClientVersion::<Io>::from(state);
     let version = match state.recv().await? {
         Some(codecs::ClientVersionFrame::VersionResp(packets::VersionResp { version })) => version,
         _ => return Err(Error::Data),
@@ -204,7 +220,14 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
 
     println!("Got client version: {}", version);
 
-    let mut state = CharSelect::<&mut TcpStream>::from(state);
+    Ok(CharSelect::<Io>::from(state))
+}
+
+async fn char_login<Io>(mut state: CharSelect<Io>) -> Result<InWorld<Io>>
+where
+    Io: AsyncIo,
+{
+    use ultimaonline_net::{packets::*, types};
     let create_info = match state.recv().await? {
         Some(codecs::CharSelectFrame::CreateCharacter(info)) => info,
         _ => return Err(Error::Data),
@@ -219,29 +242,34 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
 
     println!("Sending character into world");
 
-    let mut state = CharLogin::<&mut TcpStream>::from(state);
-    {
-        use ultimaonline_net::packets::char_login as packets;
-        state
-            .send(&packets::LoginConfirmation {
-                serial: 3833,
-                unknown_04: 0,
-                body_id: 401, // Human male?
-                x: 3667,
-                y: 2625,
-                z: 0,
-                direction: packets::Direction::South,
-                unknown_10: 0,
-                unknown_11: 0xFFFFFFFF,
-                unknown_15: [0u8; 14],
-            })
-            .await?;
+    let mut state = CharLogin::<Io>::from(state);
 
-        // TODO: Send lots of other stuff here
+    state
+        .send(&char_login::LoginConfirmation {
+            serial: PLAYER_SERIAL,
+            unknown_04: 0,
+            body: 401, // Human male?
+            x: 3667,
+            y: 2625,
+            z: 0,
+            direction: types::Direction::South,
+            unknown_10: 0,
+            unknown_11: 0xFFFFFFFF,
+            unknown_15: [0u8; 14],
+        })
+        .await?;
 
-        state.send(&packets::LoginComplete {}).await?;
-    }
+    Ok(InWorld::<Io>::from(state))
+}
 
+async fn in_world<Io>(mut state: InWorld<Io>) -> Result<()>
+where
+    Io: AsyncIo,
+{
+    use ultimaonline_net::packets::*;
+
+    // TODO: Send lots of other stuff here
+    state.send(&char_login::LoginComplete {}).await?;
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
     Ok(())
