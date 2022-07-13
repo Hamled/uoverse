@@ -61,15 +61,7 @@ where
     let mut state = CharList::<Io>::from(state);
     state
         .send(&packets::Features {
-            // Enable all flags except:
-            // Third Dawn =                             0100
-            // 6th Char Slot =                     0010 0000
-            // 8th Age =                      0001 0000 0000
-            // 10th Age =                     0100 0000 0000
-            // Increased Storage =            1000 0000 0000
-            // Roleplay Faces =          0010 0000 0000 0000
-            // Trial Account =           0100 0000 0000 0000
-            flags: 0b0000_0000_1111_1111_1001_0010_1101_1011,
+            flags: client::FEATURES,
         })
         .await?;
 
@@ -196,14 +188,7 @@ where
                 },
             ]
             .into(),
-
-            // Disable all flags except:
-            // Context Menus =                          1000
-            // AOS Expansion =                     0010 0000
-            // SE Expansion =                      1000 0000
-            // ML Expansion =                 0001 0000 0000
-            // Seventh Char Slot =       0001 0000 0000 0000
-            flags: 0b0000_0000_0000_0000_0001_0001_1010_1000,
+            flags: client::FLAGS,
             unknown_var1: -1,
         })
         .await?;
