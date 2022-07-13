@@ -193,15 +193,9 @@ where
         if let Some(len) = len {
             if len > u16::MAX as usize {
                 return Err(Error::Data);
-            } else {
-                self.size += size_of::<u16>();
-                if let Some(writer) = &mut self.writer {
-                    writer
-                        .write_all(&(len as u16).to_be_bytes())
-                        .map_err(Error::io)?;
-                }
             }
         }
+
         Ok(self)
     }
 
