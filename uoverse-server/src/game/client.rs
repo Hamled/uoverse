@@ -212,6 +212,7 @@ pub mod codecs {
             char_login::LoginComplete,
             mobile::MobLightLevel,
             world::WorldLightLevel,
+            char_login::CharStatus,
         ],
         recv []
     }

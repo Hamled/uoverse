@@ -251,7 +251,7 @@ async fn in_world<Io>(mut state: InWorld<Io>) -> Result<()>
 where
     Io: AsyncIo,
 {
-    use ultimaonline_net::packets::*;
+    use ultimaonline_net::{packets::*, types};
 
     state
         .send(&mobile::MobLightLevel {
@@ -262,6 +262,50 @@ where
 
     state.send(&world::WorldLightLevel { level: 30 }).await?;
 
+    // Character status
+    state
+        .send(&char_login::CharStatus {
+            serial: PLAYER_SERIAL,
+            name: "Hamled".into(),
+            hitpoints: char_login::Attribute {
+                current: 100,
+                maximum: 100,
+            },
+            renamable: false,
+            version: 6,    // Latest version for character status
+            gender: false, // Male
+            strength: 20,
+            dexterity: 20,
+            intelligence: 20,
+            stamina: char_login::Attribute {
+                current: 100,
+                maximum: 100,
+            },
+            mana: char_login::Attribute {
+                current: 100,
+                maximum: 100,
+            },
+            gold: 0,
+            phys_resist: 50,
+            weight: char_login::Attribute {
+                current: 0,
+                maximum: 100,
+            },
+            race: types::Race::Human,
+            stat_cap: 300,
+            follower_count: 0,
+            follower_max: 0,
+            fire_resist: 50,
+            cold_resist: 50,
+            poison_resist: 50,
+            energy_resist: 50,
+            luck: 20,
+            damage_min: 0,
+            damage_max: 0,
+            tithing_points: 0,
+            aos_stats: [Default::default(); 15],
+        })
+        .await?;
     // TODO: Send lots of other stuff here
     state.send(&char_login::LoginComplete {}).await?;
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
