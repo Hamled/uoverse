@@ -1,4 +1,4 @@
-use crate::types::FixedStr;
+use crate::types::{FixedStr, List};
 use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -66,7 +66,7 @@ pub struct ServerInfo {
 #[derive(Debug, PartialEq)]
 pub struct ServerList {
     pub flags: u8,
-    pub list: Vec<ServerInfo>,
+    pub list: List<ServerInfo, 16>,
 }
 
 #[packet(id = 0xA0)]
@@ -152,7 +152,7 @@ mod tests {
                 &mut packet,
                 &ServerList {
                     flags: 0x5D,
-                    list: servers(),
+                    list: servers().into(),
                 }
                 .to_packet(),
             )
@@ -165,7 +165,7 @@ mod tests {
         fn deserialize() {
             let server_list = ServerList {
                 flags: 0x5D,
-                list: servers(),
+                list: servers().into(),
             };
 
             let mut input: &[u8] = include_bytes!("../../test/resources/ServerList.pkt");

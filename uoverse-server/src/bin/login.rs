@@ -71,7 +71,8 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
                 fullness: 0,
                 timezone: 0,
                 ip_address: "127.0.0.1".parse().unwrap(),
-            }],
+            }]
+            .into(),
         })
         .await?;
 
