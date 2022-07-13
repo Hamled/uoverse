@@ -165,6 +165,8 @@ where
     fn serialize_str(self, v: &str) -> Result<()> {
         // We don't support UTF-8 strings
         if v.is_ascii() {
+            self.size += v.len();
+
             if let Some(writer) = &mut self.writer {
                 writer.write_all(v.as_bytes()).map_err(Error::io)?;
                 self.end_null()
