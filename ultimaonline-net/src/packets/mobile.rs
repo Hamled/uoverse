@@ -1,4 +1,4 @@
-use crate::types::{Direction, Graphic, Hue, Notoriety, Serial};
+use crate::types::{list::ListTerm, Direction, Graphic, Hue, Notoriety, Serial};
 use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -47,6 +47,5 @@ pub struct State {
 #[packet(id = 0x78, var_size = true)]
 pub struct Appearance {
     pub state: State,
-    pub items: Vec<Item>,
-    pub null_term: u32, // 0x00000000
+    pub items: ListTerm<Item, 32>,
 }

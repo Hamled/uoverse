@@ -351,8 +351,8 @@ where
                     layer: 0x0B,     // Hair
                     hue: 1111,
                 },
-            ],
-            null_term: 0,
+            ]
+            .into(),
         })
         .await?;
 
