@@ -31,12 +31,6 @@ pub struct LoginConfirmation {
     pub unknown_15: [u8; 14], // All zero
 }
 
-#[packet(id = 0xBF, var_size = true)]
-pub struct MapChange {
-    unknown_00: u16, // 0x0008
-    map_id: u8,
-}
-
 #[packet(id = 0x55)]
 pub struct LoginComplete;
 
