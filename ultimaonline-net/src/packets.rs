@@ -5,6 +5,7 @@ pub mod char_login;
 pub mod char_select;
 pub mod login;
 pub mod mobile;
+pub mod world;
 
 #[derive(Serialize)]
 pub struct Packet<'a, T> {
