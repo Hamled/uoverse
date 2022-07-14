@@ -34,10 +34,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
 
 const PLAYER_SERIAL: Serial = 3833;
 
-async fn handshake<Io>(mut socket: Io) -> Result<CharSelect<Io>>
-where
-    Io: AsyncIo,
-{
+async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
     use ultimaonline_net::packets::char_select as packets;
 
     // Client sends a 4 byte seed value, followed by the initial login packet.
@@ -208,10 +205,7 @@ where
     Ok(CharSelect::<Io>::from(state))
 }
 
-async fn char_login<Io>(mut state: CharSelect<Io>) -> Result<InWorld<Io>>
-where
-    Io: AsyncIo,
-{
+async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io>> {
     use ultimaonline_net::{packets::*, types};
     let create_info = match state.recv().await? {
         Some(codecs::CharSelectFrame::CreateCharacter(info)) => info,
@@ -247,10 +241,7 @@ where
     Ok(InWorld::<Io>::from(state))
 }
 
-async fn in_world<Io>(mut state: InWorld<Io>) -> Result<()>
-where
-    Io: AsyncIo,
-{
+async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
     use ultimaonline_net::{packets::*, types};
 
     state

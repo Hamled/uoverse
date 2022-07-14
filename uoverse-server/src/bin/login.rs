@@ -1,7 +1,8 @@
 use std::convert::TryInto;
 use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use ultimaonline_net::error::{Error, Result};
+use uoverse_server::login::client::*;
 
 #[tokio::main]
 pub async fn main() {
@@ -20,9 +21,8 @@ pub async fn main() {
     }
 }
 
-async fn process(socket: &mut TcpStream) -> Result<()> {
+async fn process<Io: AsyncIo>(socket: Io) -> Result<()> {
     use ultimaonline_net::packets::login as packets;
-    use uoverse_server::login::client::*;
 
     let mut state = Connected::new(socket);
     let hello = match state.recv().await? {
@@ -35,7 +35,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
         hello.seed, hello.version
     );
 
-    let mut state = Hello::<&mut TcpStream>::from(state);
+    let mut state = Hello::<Io>::from(state);
     let login = match state.recv().await? {
         Some(codecs::HelloFrame::AccountLogin(login)) => login,
         _ => return Err(Error::Data),
@@ -48,7 +48,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
         username, password
     );
 
-    let mut state = Login::<&mut TcpStream>::from(state);
+    let mut state = Login::<Io>::from(state);
     // TODO: Actually authenticate user and authorize for logging in
     // Check the password
     if &password[..4] != "test" {
@@ -76,7 +76,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
         })
         .await?;
 
-    let mut state = ServerSelect::<&mut TcpStream>::from(state);
+    let mut state = ServerSelect::<Io>::from(state);
 
     // Get the server that they've selected
     let selection = match state.recv().await? {
@@ -88,7 +88,7 @@ async fn process(socket: &mut TcpStream) -> Result<()> {
 
     println!("Got server selection: {}", selection);
 
-    let mut state = Handoff::<&mut TcpStream>::from(state);
+    let mut state = Handoff::<Io>::from(state);
 
     // Send the information to hand-off to the game server
     state
