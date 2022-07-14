@@ -45,7 +45,7 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
     let mut state = Connected::new(socket);
     let login = match state.recv().await? {
         Some(codecs::ConnectedFrame::GameLogin(login)) => login,
-        _ => return Err(Error::Data),
+        _ => return Err(Error::data("Did not get GameLogin packet")),
     };
 
     let username = TryInto::<&str>::try_into(&login.username).expect("Invalid UTF-8 in username");
@@ -197,7 +197,7 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
     let mut state = ClientVersion::<Io>::from(state);
     let version = match state.recv().await? {
         Some(codecs::ClientVersionFrame::VersionResp(packets::VersionResp { version })) => version,
-        _ => return Err(Error::Data),
+        _ => return Err(Error::data("Did not get VersionResp packet")),
     };
 
     println!("Got client version: {}", version);
@@ -209,7 +209,7 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
     use ultimaonline_net::{packets::*, types};
     let create_info = match state.recv().await? {
         Some(codecs::CharSelectFrame::CreateCharacter(info)) => info,
-        _ => return Err(Error::Data),
+        _ => return Err(Error::data("Did not get CreateCharacter packet")),
     };
 
     println!(

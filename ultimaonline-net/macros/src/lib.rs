@@ -72,7 +72,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
                 // Parse out the packet header
                 let packet_id = reader.read_u8().map_err(Error::io)?;
                 if(packet_id != #packet_id) {
-                    return Err(Error::Data);
+                    return Err(Error::data(format!("Packet ID {} did not match expected {}", packet_id, #packet_id)));
                 }
 
                 #size_check

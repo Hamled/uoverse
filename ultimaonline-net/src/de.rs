@@ -161,10 +161,10 @@ where
             }
         }
 
-        let s = str::from_utf8(&buffer).map_err(|_| Error::Data)?;
+        let s = str::from_utf8(&buffer).map_err(|_| Error::data("Could not parse string"))?;
         // We don't support UTF-8
         if !s.is_ascii() {
-            return Err(Error::Data);
+            return Err(Error::data("Unsupported string encoding"));
         }
 
         visitor.visit_str(s)
@@ -183,10 +183,10 @@ where
             }
         }
 
-        let s = String::from_utf8(buffer).map_err(|_| Error::Data)?;
+        let s = String::from_utf8(buffer).map_err(|_| Error::data("Could not parse string"))?;
         // We don't support UTF-8
         if !s.is_ascii() {
-            return Err(Error::Data);
+            return Err(Error::data("Unsupported string encoding"));
         }
 
         visitor.visit_string(s)

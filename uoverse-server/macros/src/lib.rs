@@ -103,7 +103,7 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
                     match packet_id {
                         #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
-                        _ => Err(::ultimaonline_net::error::Error::Data),
+                        _ => Err(::ultimaonline_net::error::Error::data(format!("Unexpected packet ID: {}", packet_id))),
                     }
                 }
             }

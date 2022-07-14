@@ -8,7 +8,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     Message(String),
     Io(io::Error),
-    Data,
+    Data(String),
 }
 
 impl ser::Error for Error {
@@ -28,7 +28,7 @@ impl fmt::Display for Error {
         match self {
             Error::Message(msg) => formatter.write_str(msg),
             Error::Io(err) => fmt::Display::fmt(err, formatter),
-            Error::Data => formatter.write_str("Invalid data"),
+            Error::Data(msg) => formatter.write_str(format!("Invalid data: {}", msg).as_str()),
         }
     }
 }
@@ -42,6 +42,10 @@ impl From<std::io::Error> for Error {
 impl Error {
     pub fn io(err: std::io::Error) -> Self {
         Error::Io(err)
+    }
+
+    pub fn data<T: Into<String>>(msg: T) -> Self {
+        Error::Data(msg.into())
     }
 }
 

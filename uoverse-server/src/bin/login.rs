@@ -27,7 +27,7 @@ async fn process<Io: AsyncIo>(socket: Io) -> Result<()> {
     let mut state = Connected::new(socket);
     let hello = match state.recv().await? {
         Some(codecs::ConnectedFrame::ClientHello(hello)) => hello,
-        _ => return Err(Error::Data),
+        _ => return Err(Error::data("Did not get ClientHello packet")),
     };
 
     println!(
@@ -38,7 +38,7 @@ async fn process<Io: AsyncIo>(socket: Io) -> Result<()> {
     let mut state = Hello::<Io>::from(state);
     let login = match state.recv().await? {
         Some(codecs::HelloFrame::AccountLogin(login)) => login,
-        _ => return Err(Error::Data),
+        _ => return Err(Error::data("Did not get AccountLogin packet")),
     };
 
     let username = TryInto::<&str>::try_into(&login.username).expect("Invalid UTF-8 in username");
@@ -83,7 +83,7 @@ async fn process<Io: AsyncIo>(socket: Io) -> Result<()> {
         Some(codecs::ServerSelectFrame::ServerSelection(packets::ServerSelection { index })) => {
             index
         }
-        _ => return Err(Error::Data),
+        _ => return Err(Error::data("Did not get ServerSelection packet")),
     };
 
     println!("Got server selection: {}", selection);

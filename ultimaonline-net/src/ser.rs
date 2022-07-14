@@ -158,7 +158,7 @@ where
                 Ok(())
             }
         } else {
-            Err(Error::Data)
+            Err(Error::data("Unsupported string encoding"))
         }
     }
 
@@ -174,7 +174,7 @@ where
                 Ok(())
             }
         } else {
-            Err(Error::Data)
+            Err(Error::data("Unsupported string encoding"))
         }
     }
 
@@ -192,7 +192,7 @@ where
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         if let Some(len) = len {
             if len > u16::MAX as usize {
-                return Err(Error::Data);
+                return Err(Error::data("Sequence is too long"));
             }
         }
 
