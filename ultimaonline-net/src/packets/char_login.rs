@@ -3,7 +3,7 @@ use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum BodyType {
     Empty,
@@ -34,7 +34,7 @@ pub struct LoginConfirmation {
 #[packet(id = 0x55)]
 pub struct LoginComplete;
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Attribute {
     pub current: u16,
     pub maximum: u16,

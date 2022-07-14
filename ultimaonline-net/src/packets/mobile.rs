@@ -3,7 +3,7 @@ use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum EntityFlags {
     None = 0x00,
@@ -23,7 +23,7 @@ pub struct MobLightLevel {
     pub level: u8,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     pub serial: Serial,
     pub type_id: u16,

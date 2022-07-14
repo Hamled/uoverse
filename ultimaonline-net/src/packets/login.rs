@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::net::{Ipv4Addr, SocketAddrV4};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClientVersion {
     major: u32,
     minor: u32,
@@ -36,7 +36,7 @@ pub struct AccountLogin {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum LoginRejectionReason {
     Invalid = 0,
@@ -53,7 +53,7 @@ pub struct LoginRejection {
     pub reason: LoginRejectionReason,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServerInfo {
     pub index: u16,
     pub name: FixedStr<32>,

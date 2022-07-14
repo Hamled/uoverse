@@ -99,7 +99,7 @@ pub type Name = FixedStr<30>;
 pub type Hue = u16;
 pub type Graphic = u16;
 
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Direction {
     North = 0,
@@ -114,7 +114,7 @@ pub enum Direction {
     Running = 0x80,
 }
 
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Notoriety {
     Innocent = 1,
@@ -126,7 +126,7 @@ pub enum Notoriety {
     Invulnerable,
 }
 
-#[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum CharIdentity {
     HumanMale = 2,
@@ -137,7 +137,7 @@ pub enum CharIdentity {
     GargoyleFemale,
 }
 
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Race {
     Human = 1,

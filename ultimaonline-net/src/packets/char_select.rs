@@ -23,7 +23,7 @@ pub struct CharList {
     pub unknown_var1: i32,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CharInfo {
     pub name: Name,
     pub unused: FixedStr<30>,
@@ -47,7 +47,7 @@ impl Default for CharInfo {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MapLocation {
     pub x: i32,
     pub y: i32,
@@ -55,7 +55,7 @@ pub struct MapLocation {
     pub id: i32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CityInfo {
     pub index: u8,
     pub city: FixedStr<32>,
@@ -65,7 +65,7 @@ pub struct CityInfo {
     pub unknown_15: i32,
 }
 
-#[derive(Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum SkillType {
     Alchemy,
@@ -128,13 +128,13 @@ pub enum SkillType {
     Throwing,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SkillChoice {
     ty: SkillType,
     val: u8,
 }
 
-#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Profession {
     Warrior = 1,
@@ -146,7 +146,7 @@ pub enum Profession {
     Ninja,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CharAppearance {
     hue: Hue,
     hair_hue: Hue,
@@ -155,7 +155,7 @@ pub struct CharAppearance {
     beard_graphic: Graphic,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Character {
     profession: Profession,
 
