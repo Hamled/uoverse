@@ -14,12 +14,15 @@ pub async fn main() {
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
-            if process(&mut socket).await.is_err() {
-                println!("Client had error");
+            match process(&mut socket).await {
+                Err(Error::Data(err)) => println!("Client had error: {}", err),
+                Err(Error::Io(err)) => println!("Client had error: {}", err),
+                Err(Error::Message(err)) => println!("Client had error: {}", err),
+                Ok(()) => {
+                    println!("Client disconnected.");
+                    socket.shutdown().await.unwrap();
+                }
             }
-
-            println!("Client disconnected.");
-            socket.shutdown().await.unwrap();
         });
     }
 }
