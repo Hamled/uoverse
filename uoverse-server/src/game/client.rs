@@ -1,9 +1,8 @@
 use bytes::BytesMut;
 use futures::sink::SinkExt;
-use std::marker::PhantomData;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::StreamExt;
-use tokio_util::codec::{Encoder, FramedRead, FramedWrite};
+use tokio_util::codec::{Encoder, Framed};
 use ultimaonline_net::{error::Result, packets::ToPacket};
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
@@ -12,27 +11,26 @@ pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
 struct GameSequencer;
 
 pub struct Connected<Io: AsyncIo> {
-    io: Io,
     sequencer: GameSequencer,
+    framer: Framed<Io, codecs::Connected>,
 }
 
 impl<Io: AsyncIo> Connected<Io> {
     pub async fn recv(&mut self) -> Result<Option<codecs::ConnectedFrame>> {
-        let mut reader = FramedRead::new(&mut self.io, codecs::Connected {});
-        reader.try_next().await
+        self.framer.try_next().await
     }
 
     pub fn new(io: Io) -> Self {
         Self {
-            io,
             sequencer: GameSequencer {},
+            framer: Framed::new(io, codecs::Connected),
         }
     }
 }
 
 pub struct CharList<Io: AsyncIo> {
-    io: Io,
     sequencer: GameSequencer,
+    framer: Framed<Io, CompressionCodec<codecs::CharList>>,
 }
 
 impl<Io: AsyncIo> CharList<Io> {
@@ -40,79 +38,64 @@ impl<Io: AsyncIo> CharList<Io> {
     where
         P: codecs::CharListEncode + ToPacket<'a> + ::serde::ser::Serialize,
     {
-        let mut writer = FramedWrite::new(&mut self.io, CompressionCodec::new(codecs::CharList {}));
-        writer.send(pkt).await
+        self.framer.send(pkt).await
     }
 }
 
 impl<Io: AsyncIo> From<Connected<Io>> for CharList<Io> {
     fn from(val: Connected<Io>) -> Self {
         Self {
-            io: val.io,
             sequencer: val.sequencer,
+            framer: val
+                .framer
+                .map_codec(|_| CompressionCodec::new(codecs::CharList {})),
         }
     }
 }
 
 pub struct ClientVersion<Io: AsyncIo> {
-    io: Io,
     sequencer: GameSequencer,
+    framer: Framed<Io, codecs::ClientVersion>,
 }
 
 impl<Io: AsyncIo> ClientVersion<Io> {
     pub async fn recv(&mut self) -> Result<Option<codecs::ClientVersionFrame>> {
-        let mut reader = FramedRead::new(&mut self.io, codecs::ClientVersion {});
-        reader.try_next().await
-    }
-
-    pub fn new(io: Io) -> Self {
-        Self {
-            io,
-            sequencer: GameSequencer {},
-        }
+        self.framer.try_next().await
     }
 }
 
 impl<Io: AsyncIo> From<CharList<Io>> for ClientVersion<Io> {
     fn from(val: CharList<Io>) -> Self {
         Self {
-            io: val.io,
             sequencer: val.sequencer,
+            framer: val.framer.map_codec(|_| codecs::ClientVersion),
         }
     }
 }
 
 pub struct CharSelect<Io: AsyncIo> {
-    io: Io,
     sequencer: GameSequencer,
+    framer: Framed<Io, codecs::CharSelect>,
 }
 
 impl<Io: AsyncIo> CharSelect<Io> {
     pub async fn recv(&mut self) -> Result<Option<codecs::CharSelectFrame>> {
-        let mut reader = FramedRead::new(&mut self.io, codecs::CharSelect {});
-        reader.try_next().await
-    }
-
-    pub fn new(io: Io) -> Self {
-        Self {
-            io,
-            sequencer: GameSequencer {},
-        }
+        self.framer.try_next().await
     }
 }
 
 impl<Io: AsyncIo> From<ClientVersion<Io>> for CharSelect<Io> {
     fn from(val: ClientVersion<Io>) -> Self {
         Self {
-            io: val.io,
             sequencer: val.sequencer,
+            framer: val.framer.map_codec(|_| codecs::CharSelect),
         }
     }
 }
 
 pub struct CharLogin<Io: AsyncIo> {
-    io: Io,
     sequencer: GameSequencer,
+    framer: Framed<Io, CompressionCodec<codecs::CharLogin>>,
 }
 
 impl<Io: AsyncIo> CharLogin<Io> {
@@ -120,25 +103,25 @@ impl<Io: AsyncIo> CharLogin<Io> {
     where
         P: codecs::CharLoginEncode + ToPacket<'a> + ::serde::ser::Serialize,
     {
-        let mut writer =
-            FramedWrite::new(&mut self.io, CompressionCodec::new(codecs::CharLogin {}));
-        writer.send(pkt).await
+        self.framer.send(pkt).await
     }
 }
 
 impl<Io: AsyncIo> From<CharSelect<Io>> for CharLogin<Io> {
     fn from(val: CharSelect<Io>) -> Self {
         Self {
-            io: val.io,
             sequencer: val.sequencer,
+            framer: val
+                .framer
+                .map_codec(|_| CompressionCodec::new(codecs::CharLogin)),
         }
     }
 }
 
 pub struct InWorld<Io: AsyncIo> {
-    io: Io,
     #[allow(dead_code)]
     sequencer: GameSequencer,
+    framer: Framed<Io, CompressionCodec<codecs::InWorld>>,
 }
 
 impl<Io: AsyncIo> InWorld<Io> {
@@ -146,16 +129,17 @@ impl<Io: AsyncIo> InWorld<Io> {
     where
         P: codecs::InWorldEncode + ToPacket<'a> + ::serde::ser::Serialize,
     {
-        let mut writer = FramedWrite::new(&mut self.io, CompressionCodec::new(codecs::InWorld {}));
-        writer.send(pkt).await
+        self.framer.send(pkt).await
     }
 }
 
 impl<Io: AsyncIo> From<CharLogin<Io>> for InWorld<Io> {
     fn from(val: CharLogin<Io>) -> Self {
         Self {
-            io: val.io,
             sequencer: val.sequencer,
+            framer: val
+                .framer
+                .map_codec(|_| CompressionCodec::new(codecs::InWorld {})),
         }
     }
 }
@@ -219,21 +203,17 @@ pub mod codecs {
     }
 }
 
-pub struct CompressionCodec<'a, I, C: Encoder<&'a I>> {
+pub struct CompressionCodec<C> {
     codec: C,
-    item_type: PhantomData<&'a I>,
 }
 
-impl<'a, I, C: Encoder<&'a I>> CompressionCodec<'a, I, C> {
+impl<C> CompressionCodec<C> {
     fn new(codec: C) -> Self {
-        Self {
-            codec,
-            item_type: PhantomData {},
-        }
+        Self { codec }
     }
 }
 
-impl<'a, I, C: Encoder<&'a I>> Encoder<&'a I> for CompressionCodec<'a, I, C> {
+impl<'a, I, C: Encoder<&'a I>> Encoder<&'a I> for CompressionCodec<C> {
     type Error = C::Error;
 
     fn encode(&mut self, pkt: &'a I, dst: &mut BytesMut) -> std::result::Result<(), Self::Error> {
