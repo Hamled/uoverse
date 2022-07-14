@@ -1,4 +1,5 @@
-use std::convert::TryInto;
+use std::net::SocketAddrV4;
+use std::{convert::TryInto, env, net::Ipv4Addr};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use ultimaonline_net::{
@@ -7,9 +8,29 @@ use ultimaonline_net::{
 };
 use uoverse_server::game::client::{self, *};
 
+const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+const DEFAULT_LISTEN_PORT: u16 = 2594;
+
 #[tokio::main]
 pub async fn main() {
-    let listener = TcpListener::bind("127.0.0.1:2594").await.unwrap();
+    let mut listen_addr = DEFAULT_LISTEN_ADDR;
+    let mut listen_port = DEFAULT_LISTEN_PORT;
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        listen_addr = args[1]
+            .parse()
+            .expect(format!("Invalid listen address: {}", &args[1]).as_str())
+    }
+    if args.len() > 2 {
+        listen_port = u16::from_str_radix(&args[2], 10)
+            .expect(format!("Invalid listen port: {}", &args[2]).as_str());
+    }
+
+    let listen_socket = SocketAddrV4::new(listen_addr, listen_port);
+    let listener = TcpListener::bind(listen_socket).await.unwrap();
+
+    println!("Game server listening on {}", listen_socket);
 
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
