@@ -197,6 +197,7 @@ pub mod codecs {
             char_login::LoginComplete,
             mobile::Appearance,
             mobile::MobLightLevel,
+            mobile::State,
             world::WorldLightLevel,
         ],
         recv []

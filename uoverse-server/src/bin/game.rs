@@ -301,15 +301,17 @@ async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
         })
         .await?;
 
+    let mut mob_x = 3668;
+    let mut mob_dir = types::Direction::East;
     state
         .send(&mobile::Appearance {
             state: mobile::State {
                 serial: 55858,
                 body: 401,
-                x: 3668,
+                x: mob_x,
                 y: 2625,
                 z: 0,
-                direction: types::Direction::East,
+                direction: mob_dir,
                 hue: 1003,
                 flags: mobile::EntityFlags::None,
                 notoriety: types::Notoriety::Ally,
@@ -353,7 +355,38 @@ async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
     // TODO: Send lots of other stuff here
     state.send(&char_login::LoginComplete {}).await?;
 
+    let mut frame_count = 0;
     loop {
+        frame_count += 1;
+
+        if (frame_count / 10) % 2 == 0 {
+            mob_x += 1;
+        } else {
+            mob_x -= 1;
+        }
+
+        if frame_count % 10 == 0 {
+            mob_dir = match mob_dir {
+                types::Direction::East => types::Direction::West,
+                types::Direction::West => types::Direction::East,
+                _ => types::Direction::East,
+            }
+        }
+
+        state
+            .send(&mobile::State {
+                serial: 55858,
+                body: 401,
+                x: mob_x,
+                y: 2625,
+                z: 0,
+                direction: mob_dir,
+                hue: 1003,
+                flags: mobile::EntityFlags::None,
+                notoriety: types::Notoriety::Ally,
+            })
+            .await?;
+
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 }
