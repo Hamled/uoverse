@@ -31,7 +31,7 @@ pub struct Item {
     pub hue: Hue,
 }
 
-#[packet(id = 0x77, var_size = true)]
+#[packet(id = 0x77)]
 pub struct State {
     pub serial: Serial,
     pub body: Graphic,
