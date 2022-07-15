@@ -66,16 +66,16 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
     let vis = codec_def.visibility;
     let codec_name = codec_def.name;
+    let frame_name = Ident::new(&format!("{}Frame", codec_name), codec_name.span());
 
     let decoder = if !codec_def.recv_pkts.is_empty() {
-        let frame_name = Ident::new(&format!("{}Frame", codec_name), codec_name.span());
         let pkts = codec_def.recv_pkts.iter();
         let variants = codec_def
             .recv_pkts
             .iter()
             .map(|p| &p.segments.last().unwrap().ident);
         let frame = quote! {
-            pub enum #frame_name {
+            #vis enum #frame_name {
                 #( #variants(#pkts) ),*
             }
         };
@@ -100,7 +100,6 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     let packet_id = src[0];
 
                     // match that to the appropriate packet, or error if none matches
-
                     match packet_id {
                         #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
                         _ => Err(::ultimaonline_net::error::Error::data(format!("Unexpected packet ID: {}", packet_id))),
@@ -114,10 +113,20 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
             #decoder_impl
         }
     } else {
-        quote! {}
+        quote! {
+            #vis enum #frame_name {}
+            impl ::tokio_util::codec::Decoder for #codec_name {
+                type Item = #frame_name;
+                type Error = ::ultimaonline_net::error::Error;
+
+                fn decode(&mut self, src: &mut ::bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+                    unimplemented!("Decoder::decode called on codec with no recv packets.");
+                }
+            }
+        }
     };
 
-    let encoder = if !codec_def.send_pkts.is_empty() {
+    let encoder = {
         let trait_name = Ident::new(&format!("{}Encode", codec_name), codec_name.span());
         let pkts = codec_def.send_pkts.iter();
         quote! {
@@ -140,8 +149,6 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 }
             }
         }
-    } else {
-        quote! {}
     };
 
     let output = quote! {
