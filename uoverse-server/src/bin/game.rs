@@ -1,7 +1,14 @@
-use std::net::SocketAddrV4;
-use std::{convert::TryInto, env, net::Ipv4Addr};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::{
+    convert::TryInto,
+    env,
+    net::{Ipv4Addr, SocketAddrV4},
+    sync::Arc,
+};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::Notify,
+};
 use ultimaonline_net::{
     error::{Error, Result},
     types::Serial,
@@ -32,19 +39,35 @@ pub async fn main() {
 
     println!("Game server listening on {}", listen_socket);
 
+    let shutdown_notice = Arc::new(Notify::new());
+    {
+        let shutdown_notice = shutdown_notice.clone();
+        ctrlc::set_handler(move || {
+            shutdown_notice.notify_one();
+        })
+        .expect("Error setting Ctrl-C signal handler");
+    }
     loop {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        tokio::spawn(async move {
-            match process(&mut socket).await {
-                Err(Error::Data(err)) => println!("Client had error: {}", err),
-                Err(Error::Io(err)) => println!("Client had error: {}", err),
-                Err(Error::Message(err)) => println!("Client had error: {}", err),
-                Ok(()) => {
-                    println!("Client disconnected.");
-                    socket.shutdown().await.unwrap();
-                }
+        tokio::select! {
+            Ok((mut socket, _)) = listener.accept() => {
+                tokio::spawn(async move {
+                    match process(&mut socket).await {
+                        Err(Error::Data(err)) => println!("Client had error: {}", err),
+                        Err(Error::Io(err)) => println!("Client had error: {}", err),
+                        Err(Error::Message(err)) => println!("Client had error: {}", err),
+                        Ok(()) => {
+                            println!("Client disconnected.");
+                            socket.shutdown().await.unwrap();
+                        }
+                    }
+                });
             }
-        });
+
+            _ = shutdown_notice.notified() => {
+                println!("Stopped listening on {}", listen_socket);
+                break;
+            }
+        }
     }
 }
 
