@@ -186,6 +186,8 @@ pub mod codecs {
         pub CharLogin,
         send [
             char_login::LoginConfirmation,
+            char_login::CharStatus,
+            char_login::LoginComplete,
         ],
         recv []
     }
@@ -193,8 +195,6 @@ pub mod codecs {
     define_codec! {
         pub InWorld,
         send [
-            char_login::CharStatus,
-            char_login::LoginComplete,
             mobile::Appearance,
             mobile::MobLightLevel,
             mobile::State,

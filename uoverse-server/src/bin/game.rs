@@ -305,21 +305,6 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
         })
         .await?;
 
-    Ok(InWorld::<Io>::from(state))
-}
-
-async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
-    use ultimaonline_net::{packets::*, types};
-
-    state
-        .send(&mobile::MobLightLevel {
-            serial: PLAYER_SERIAL,
-            level: 30,
-        })
-        .await?;
-
-    state.send(&world::WorldLightLevel { level: 30 }).await?;
-
     // Character status
     state
         .send(&char_login::CharStatus {
@@ -364,6 +349,23 @@ async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
             aos_stats: [Default::default(); 15],
         })
         .await?;
+
+    state.send(&char_login::LoginComplete {}).await?;
+
+    Ok(InWorld::<Io>::from(state))
+}
+
+async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
+    use ultimaonline_net::{packets::*, types};
+
+    state
+        .send(&mobile::MobLightLevel {
+            serial: PLAYER_SERIAL,
+            level: 30,
+        })
+        .await?;
+
+    state.send(&world::WorldLightLevel { level: 30 }).await?;
 
     let mut mob_x = 3668;
     let mut mob_dir = types::Direction::East;
@@ -417,8 +419,6 @@ async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
         .await?;
 
     // TODO: Send lots of other stuff here
-    state.send(&char_login::LoginComplete {}).await?;
-
     let mut frame_count = 0;
     loop {
         frame_count += 1;
