@@ -2,7 +2,10 @@ use std::{
     convert::TryInto,
     env,
     net::{Ipv4Addr, SocketAddrV4},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 use tokio::net::{TcpListener, TcpStream};
 use tokio::{
@@ -14,6 +17,7 @@ use ultimaonline_net::{
     types::Serial,
 };
 use uoverse_server::game::client::{self, *};
+use uoverse_server::game::server;
 
 const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 const DEFAULT_LISTEN_PORT: u16 = 2594;
@@ -39,14 +43,21 @@ pub async fn main() {
 
     println!("Game server listening on {}", listen_socket);
 
+    let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_notice = Arc::new(Notify::new());
     {
+        let shutdown = shutdown.clone();
         let shutdown_notice = shutdown_notice.clone();
         ctrlc::set_handler(move || {
+            shutdown.store(true, Ordering::Relaxed);
             shutdown_notice.notify_one();
         })
         .expect("Error setting Ctrl-C signal handler");
     }
+
+    let server = Arc::new(server::Server::new(shutdown.clone()));
+    let server_task = tokio::spawn(async move { server.run_loop().await });
+
     loop {
         tokio::select! {
             Ok((mut socket, _)) = listener.accept() => {
@@ -67,6 +78,15 @@ pub async fn main() {
                 println!("Stopped listening on {}", listen_socket);
                 break;
             }
+        }
+    }
+
+    match server_task.await.expect("Error joining server task") {
+        Err(Error::Message(err)) => println!("Server task had error: {}", err),
+        Err(Error::Io(err)) => println!("Server task had error: {}", err),
+        Err(Error::Data(err)) => println!("Server task had error: {}", err),
+        Ok(()) => {
+            println!("Shutdown complete.");
         }
     }
 }
