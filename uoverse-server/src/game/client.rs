@@ -2,7 +2,7 @@ use bytes::BytesMut;
 use futures::sink::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::StreamExt;
-use tokio_util::codec::{Encoder, Framed};
+use tokio_util::codec::{Decoder, Encoder, Framed};
 use ultimaonline_net::{error::Result, packets::ToPacket};
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
@@ -228,6 +228,18 @@ impl<'a, I, C: Encoder<&'a I>> Encoder<&'a I> for CompressionCodec<C> {
         dst.put(compressed.as_slice());
 
         Ok(())
+    }
+}
+
+impl<C: Decoder> Decoder for CompressionCodec<C> {
+    type Error = C::Error;
+    type Item = C::Item;
+
+    fn decode(
+        &mut self,
+        src: &mut BytesMut,
+    ) -> std::result::Result<Option<Self::Item>, Self::Error> {
+        self.codec.decode(src)
     }
 }
 
