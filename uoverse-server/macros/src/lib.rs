@@ -123,6 +123,33 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
     let encoder = {
         let trait_name = Ident::new(&format!("{}PacketSend", codec_name), codec_name.span());
+        let frame_name = Ident::new(&format!("{}FrameSend", codec_name), codec_name.span());
+
+        let frame = {
+            let pkts = codec_def.send_pkts.iter();
+            let variants = codec_def
+                .send_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+                #vis enum #frame_name {
+                    #( #variants(#pkts) ),*
+                }
+            }
+        };
+
+        let frame_match_arms = if !codec_def.send_pkts.is_empty() {
+            let names = codec_def
+                .send_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+               #( #names(content) => ::ultimaonline_net::packets::write_packet(content, &mut dst.writer()) ),*,
+            }
+        } else {
+            quote! {}
+        };
+
         let pkts = codec_def.send_pkts.iter();
         quote! {
             #vis trait #trait_name {}
@@ -142,6 +169,23 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     ::ultimaonline_net::packets::write_packet(pkt, &mut dst.writer())
                 }
             }
+
+            #frame
+
+            impl<'a> ::tokio_util::codec::Encoder<&'a #frame_name> for #codec_name {
+                type Error = ::ultimaonline_net::error::Error;
+
+                fn encode(&mut self, pkt: &'a #frame_name, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
+                    use ::bytes::BufMut;
+                    use #frame_name::*;
+
+                    match pkt {
+                        #frame_match_arms
+                        _ => unreachable!(),
+                    }
+                }
+            }
+
         }
     };
 
