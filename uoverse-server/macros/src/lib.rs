@@ -68,24 +68,36 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
     let codec_name = codec_def.name;
     let frame_name = Ident::new(&format!("{}FrameRecv", codec_name), codec_name.span());
 
-    let decoder = if !codec_def.recv_pkts.is_empty() {
-        let pkts = codec_def.recv_pkts.iter();
-        let variants = codec_def
-            .recv_pkts
-            .iter()
-            .map(|p| &p.segments.last().unwrap().ident);
-        let frame = quote! {
-            #vis enum #frame_name {
-                #( #variants(#pkts) ),*
+    let decoder = {
+        let frame = {
+            let pkts = codec_def.recv_pkts.iter();
+            let variants = codec_def
+                .recv_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+                #vis enum #frame_name {
+                    #( #variants(#pkts) ),*
+                }
             }
         };
 
-        let pkts = codec_def.recv_pkts.iter();
-        let names = codec_def
-            .recv_pkts
-            .iter()
-            .map(|p| &p.segments.last().unwrap().ident);
-        let decoder_impl = quote! {
+        let id_match_arms = if !codec_def.recv_pkts.is_empty() {
+            let pkts = codec_def.recv_pkts.iter();
+            let names = codec_def
+                .recv_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+               #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+            }
+        } else {
+            quote! {}
+        };
+
+        quote! {
+            #frame
+
             impl ::tokio_util::codec::Decoder for #codec_name {
                 type Item = #frame_name;
                 type Error = ::ultimaonline_net::error::Error;
@@ -101,26 +113,9 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
                     // match that to the appropriate packet, or error if none matches
                     match packet_id {
-                        #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+                        #id_match_arms
                         _ => Err(::ultimaonline_net::error::Error::data(format!("Unexpected packet ID: {}", packet_id))),
                     }
-                }
-            }
-        };
-
-        quote! {
-            #frame
-            #decoder_impl
-        }
-    } else {
-        quote! {
-            #vis enum #frame_name {}
-            impl ::tokio_util::codec::Decoder for #codec_name {
-                type Item = #frame_name;
-                type Error = ::ultimaonline_net::error::Error;
-
-                fn decode(&mut self, src: &mut ::bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-                    unimplemented!("Decoder::decode called on codec with no recv packets.");
                 }
             }
         }
