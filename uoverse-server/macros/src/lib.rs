@@ -54,8 +54,8 @@ impl Parse for CodecDef {
         Ok(CodecDef {
             visibility,
             name,
-            send_pkts: send_pkts,
-            recv_pkts: recv_pkts,
+            send_pkts,
+            recv_pkts,
         })
     }
 }
@@ -66,7 +66,7 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
     let vis = codec_def.visibility;
     let codec_name = codec_def.name;
-    let frame_name = Ident::new(&format!("{}Frame", codec_name), codec_name.span());
+    let frame_name = Ident::new(&format!("{}FrameRecv", codec_name), codec_name.span());
 
     let decoder = if !codec_def.recv_pkts.is_empty() {
         let pkts = codec_def.recv_pkts.iter();

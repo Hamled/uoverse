@@ -69,7 +69,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
 
     let mut state = Connected::new(socket);
     let hello = match state.recv().await? {
-        Some(codecs::ConnectedFrame::ClientHello(hello)) => hello,
+        Some(codecs::ConnectedFrameRecv::ClientHello(hello)) => hello,
         _ => return Err(Error::data("Did not get ClientHello packet")),
     };
 
@@ -80,7 +80,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
 
     let mut state = Hello::<Io>::from(state);
     let login = match state.recv().await? {
-        Some(codecs::HelloFrame::AccountLogin(login)) => login,
+        Some(codecs::HelloFrameRecv::AccountLogin(login)) => login,
         _ => return Err(Error::data("Did not get AccountLogin packet")),
     };
 
@@ -123,9 +123,9 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
 
     // Get the server that they've selected
     let selection = match state.recv().await? {
-        Some(codecs::ServerSelectFrame::ServerSelection(packets::ServerSelection { index })) => {
-            index
-        }
+        Some(codecs::ServerSelectFrameRecv::ServerSelection(packets::ServerSelection {
+            index,
+        })) => index,
         _ => return Err(Error::data("Did not get ServerSelection packet")),
     };
 

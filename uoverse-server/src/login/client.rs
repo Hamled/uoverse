@@ -15,7 +15,7 @@ pub struct Connected<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> Connected<Io> {
-    pub async fn recv(&mut self) -> Result<Option<codecs::ConnectedFrame>> {
+    pub async fn recv(&mut self) -> Result<Option<codecs::ConnectedFrameRecv>> {
         self.framer.try_next().await
     }
 
@@ -33,7 +33,7 @@ pub struct Hello<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> Hello<Io> {
-    pub async fn recv(&mut self) -> Result<Option<codecs::HelloFrame>> {
+    pub async fn recv(&mut self) -> Result<Option<codecs::HelloFrameRecv>> {
         self.framer.try_next().await
     }
 }
@@ -77,7 +77,7 @@ pub struct ServerSelect<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> ServerSelect<Io> {
-    pub async fn recv(&mut self) -> Result<Option<codecs::ServerSelectFrame>> {
+    pub async fn recv(&mut self) -> Result<Option<codecs::ServerSelectFrameRecv>> {
         self.framer.try_next().await
     }
 }
