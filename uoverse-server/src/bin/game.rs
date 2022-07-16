@@ -7,7 +7,7 @@ use std::{
         Arc,
     },
 };
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::Notify,
@@ -366,102 +366,8 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
     Ok(InWorld::<Io>::from(state))
 }
 
-async fn in_world<Io: AsyncIo>(_server: Arc<server::Server>, mut state: InWorld<Io>) -> Result<()> {
-    use ultimaonline_net::{packets::*, types};
+async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut _state: InWorld<Io>) -> Result<()> {
+    let mut _client = server.new_client()?;
 
-    state
-        .send(&mobile::MobLightLevel {
-            serial: PLAYER_SERIAL,
-            level: 30,
-        })
-        .await?;
-
-    state.send(&world::WorldLightLevel { level: 30 }).await?;
-
-    let mut mob_x = 3668;
-    let mut mob_dir = types::Direction::East;
-    state
-        .send(&mobile::Appearance {
-            state: mobile::State {
-                serial: 55858,
-                body: 401,
-                x: mob_x,
-                y: 2625,
-                z: 0,
-                direction: mob_dir,
-                hue: 1003,
-                flags: mobile::EntityFlags::None,
-                notoriety: types::Notoriety::Ally,
-            },
-            items: vec![
-                mobile::Item {
-                    serial: 0x40000001,
-                    type_id: 0x1EFD, // Fancy Shirt
-                    layer: 0x05,     // Shirt
-                    hue: 1837,
-                },
-                mobile::Item {
-                    serial: 0x40000002,
-                    type_id: 0x1539, // Long Pants
-                    layer: 0x04,     // Pants
-                    hue: 1897,
-                },
-                mobile::Item {
-                    serial: 0x40000003,
-                    type_id: 0x170B, // Boots
-                    layer: 0x04,     // Shoes
-                    hue: 1900,
-                },
-                mobile::Item {
-                    serial: 0x40000004,
-                    type_id: 0x1515, // Cloak
-                    layer: 0x14,     // Cloak
-                    hue: 1811,
-                },
-                mobile::Item {
-                    serial: 0x40000005,
-                    type_id: 0x203C, // Long hair
-                    layer: 0x0B,     // Hair
-                    hue: 1111,
-                },
-            ]
-            .into(),
-        })
-        .await?;
-
-    // TODO: Send lots of other stuff here
-    let mut frame_count = 0;
-    loop {
-        frame_count += 1;
-
-        if (frame_count / 10) % 2 == 0 {
-            mob_x += 1;
-        } else {
-            mob_x -= 1;
-        }
-
-        if frame_count % 10 == 0 {
-            mob_dir = match mob_dir {
-                types::Direction::East => types::Direction::West,
-                types::Direction::West => types::Direction::East,
-                _ => types::Direction::East,
-            }
-        }
-
-        state
-            .send(&mobile::State {
-                serial: 55858,
-                body: 401,
-                x: mob_x,
-                y: 2625,
-                z: 0,
-                direction: mob_dir,
-                hue: 1003,
-                flags: mobile::EntityFlags::None,
-                notoriety: types::Notoriety::Ally,
-            })
-            .await?;
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
+    Ok(())
 }

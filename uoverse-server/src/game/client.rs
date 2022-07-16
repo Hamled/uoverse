@@ -1,9 +1,15 @@
 use bytes::BytesMut;
 use futures::sink::SinkExt;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    sync::mpsc,
+};
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Decoder, Encoder, Framed};
-use ultimaonline_net::{error::Result, packets::Packet};
+use ultimaonline_net::{
+    error::{Error, Result},
+    packets::Packet,
+};
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
 
@@ -144,6 +150,62 @@ impl<Io: AsyncIo> From<CharLogin<Io>> for InWorld<Io> {
                 .framer
                 .map_codec(|_| CompressionCodec::new(codecs::InWorld {})),
         }
+    }
+}
+
+pub trait ClientSender {
+    type SendItem;
+    fn send(&mut self, item: Self::SendItem) -> Result<()>;
+}
+
+pub trait ClientReceiver {
+    type RecvItem;
+    fn recv(&mut self) -> Result<Self::RecvItem>;
+}
+
+pub struct Client {
+    pub receiver: mpsc::UnboundedReceiver<codecs::InWorldFrameSend>,
+    pub sender: mpsc::UnboundedSender<codecs::InWorldFrameRecv>,
+}
+
+impl ClientSender for Client {
+    type SendItem = codecs::InWorldFrameRecv;
+    fn send(&mut self, item: Self::SendItem) -> Result<()> {
+        self.sender
+            .send(item)
+            .map_err(|_| Error::Message("TODO: MPSC send error".to_string()))
+    }
+}
+
+impl ClientReceiver for Client {
+    type RecvItem = codecs::InWorldFrameSend;
+    fn recv(&mut self) -> Result<Self::RecvItem> {
+        self.receiver
+            .try_recv()
+            .map_err(|_| Error::Message("TODO: MPSC recv error".to_string()))
+    }
+}
+
+pub struct WorldClient {
+    pub receiver: mpsc::UnboundedReceiver<codecs::InWorldFrameRecv>,
+    pub sender: mpsc::UnboundedSender<codecs::InWorldFrameSend>,
+}
+
+impl ClientSender for WorldClient {
+    type SendItem = codecs::InWorldFrameSend;
+    fn send(&mut self, item: Self::SendItem) -> Result<()> {
+        self.sender
+            .send(item)
+            .map_err(|_| Error::Message("TODO: MPSC send error".to_string()))
+    }
+}
+
+impl ClientReceiver for WorldClient {
+    type RecvItem = codecs::InWorldFrameRecv;
+    fn recv(&mut self) -> Result<Self::RecvItem> {
+        self.receiver
+            .try_recv()
+            .map_err(|_| Error::Message("TODO: MPSC recv error".to_string()))
     }
 }
 

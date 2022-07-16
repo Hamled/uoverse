@@ -1,16 +1,23 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Mutex,
 };
-use ultimaonline_net::error::Result;
+use tokio::sync::mpsc;
+use ultimaonline_net::error::{Error, Result};
+
+use super::client::{Client, ClientReceiver, ClientSender, WorldClient};
 
 pub struct Server {
     shutdown: Arc<AtomicBool>,
+    clients: Mutex<Vec<WorldClient>>,
 }
 
 impl Server {
     pub fn new(shutdown: Arc<AtomicBool>) -> Self {
-        Server { shutdown }
+        Server {
+            shutdown,
+            clients: Mutex::new(vec![]),
+        }
     }
 
     pub async fn run_loop(&self) -> Result<()> {
@@ -25,4 +32,25 @@ impl Server {
         println!("Server shutting down.");
         Ok(())
     }
+
+    pub fn new_client(&self) -> Result<Client> {
+        let (output_send, output_recv) =
+            mpsc::unbounded_channel::<<WorldClient as ClientSender>::SendItem>();
+        let (input_send, input_recv) =
+            mpsc::unbounded_channel::<<WorldClient as ClientReceiver>::RecvItem>();
+
+        self.clients
+            .lock()
+            .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?
+            .push(WorldClient {
+                sender: output_send,
+                receiver: input_recv,
+            });
+
+        Ok(Client {
+            sender: input_send,
+            receiver: output_recv,
+        })
+    }
+}
 }
