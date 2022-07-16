@@ -14,6 +14,7 @@ tokio-util = { version = "0.7.3", features = ["codec"]}
 ultimaonline-net = { version = "0.1.0", path = "../ultimaonline-net" }
 uoverse-server-macros = { path = "macros" }
 serde = { version = "1.0.119" }
+erased-serde = "0.3.21"
 ctrlc = "3.2.2"
 
 [[bin]]
