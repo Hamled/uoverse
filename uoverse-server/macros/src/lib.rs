@@ -127,7 +127,7 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
     };
 
     let encoder = {
-        let trait_name = Ident::new(&format!("{}Encode", codec_name), codec_name.span());
+        let trait_name = Ident::new(&format!("{}PacketSend", codec_name), codec_name.span());
         let pkts = codec_def.send_pkts.iter();
         quote! {
             #vis trait #trait_name {}

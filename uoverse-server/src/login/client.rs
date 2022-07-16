@@ -55,7 +55,7 @@ pub struct Login<Io: AsyncIo> {
 impl<Io: AsyncIo> Login<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::LoginEncode + ::serde::ser::Serialize,
+        P: codecs::LoginPacketSend + ::serde::ser::Serialize,
         Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
@@ -100,7 +100,7 @@ pub struct Handoff<Io: AsyncIo> {
 impl<Io: AsyncIo> Handoff<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::HandoffEncode + ::serde::ser::Serialize,
+        P: codecs::HandoffPacketSend + ::serde::ser::Serialize,
         Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
