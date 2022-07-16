@@ -144,8 +144,7 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 fn encode(&mut self, pkt: &'a P, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
                     use ::bytes::BufMut;
 
-                    ::ultimaonline_net::packets::Packet::<&'a P>::from(pkt).to_writer(&mut dst.writer())?;
-                    Ok(())
+                    ::ultimaonline_net::packets::write_packet(pkt, &mut dst.writer())
                 }
             }
         }

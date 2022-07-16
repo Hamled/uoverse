@@ -30,3 +30,12 @@ where
 {
     fn from_packet_data<R: Read>(reader: &mut R) -> Result<Self>;
 }
+
+pub fn write_packet<T, W: Write>(content: T, dst: &mut W) -> Result<()>
+where
+    T: Serialize,
+    Packet<T>: From<T>,
+{
+    Packet::<T>::from(content).to_writer(dst)?;
+    Ok(())
+}
