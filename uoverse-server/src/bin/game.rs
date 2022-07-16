@@ -56,19 +56,29 @@ pub async fn main() {
     }
 
     let server = Arc::new(server::Server::new(shutdown.clone()));
-    let server_task = tokio::spawn(async move { server.run_loop().await });
+    let server_task = {
+        let server = server.clone();
+        tokio::spawn(async move { server.run_loop().await })
+    };
 
     loop {
         tokio::select! {
             Ok((mut socket, _)) = listener.accept() => {
+                let server = server.clone();
                 tokio::spawn(async move {
-                    match process(&mut socket).await {
-                        Err(Error::Data(err)) => println!("Client had error: {}", err),
-                        Err(Error::Io(err)) => println!("Client had error: {}", err),
-                        Err(Error::Message(err)) => println!("Client had error: {}", err),
-                        Ok(()) => {
-                            println!("Client disconnected.");
-                            socket.shutdown().await.unwrap();
+                    match preworld(&mut socket).await {
+                        Err(Error::Data(err)) => println!("Client had error in pre-world: {}", err),
+                        Err(Error::Io(err)) => println!("Client had error in pre-world: {}", err),
+                        Err(Error::Message(err)) => println!("Client had error in pre-world: {}", err),
+                        Ok(state) => {
+                            println!("Client completed pre-world.");
+                            match in_world(server, state).await {
+                                Err(err) => println!("Client had error in-world: {}", err),
+                                Ok(()) => {
+                                    println!("Client disconnected.");
+                                    socket.shutdown().await.unwrap();
+                                }
+                            }
                         }
                     }
                 });
@@ -91,12 +101,11 @@ pub async fn main() {
     }
 }
 
-async fn process(socket: &mut TcpStream) -> Result<()> {
+async fn preworld<Io: AsyncIo>(socket: Io) -> Result<InWorld<Io>> {
     let state = handshake(socket).await?;
     let state = char_login(state).await?;
-    in_world(state).await?;
 
-    Ok(())
+    Ok(state)
 }
 
 const PLAYER_SERIAL: Serial = 3833;
@@ -355,7 +364,7 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
     Ok(InWorld::<Io>::from(state))
 }
 
-async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
+async fn in_world<Io: AsyncIo>(_server: Arc<server::Server>, mut state: InWorld<Io>) -> Result<()> {
     use ultimaonline_net::{packets::*, types};
 
     state
