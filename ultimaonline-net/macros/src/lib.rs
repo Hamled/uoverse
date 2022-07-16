@@ -31,7 +31,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
         true => (
             quote! {size: Some(size as u16),},
             quote! {
-                let size = crate::ser::to_size(self).expect("Could not serialize packet for size");
+                let size = crate::ser::to_size(val).expect("Could not serialize packet for size");
                 let size = ::core::mem::size_of::<u8>() + // packet id
                            ::core::mem::size_of::<u16>() + // packet size
                            size;
@@ -52,14 +52,14 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
             pub const PACKET_ID: u8 = #packet_id;
         }
 
-        impl<'a> crate::packets::ToPacket<'a> for #main_ident {
-            fn to_packet(&'a self) -> crate::packets::Packet<'a, Self> {
+        impl<'a> ::std::convert::From<&'a #main_ident> for crate::packets::Packet<&'a #main_ident> {
+            fn from(val: &'a #main_ident) -> Self {
                 #size_calc
 
                 crate::packets::Packet {
                     id: #packet_id,
                     #size_field
-                    contents: self,
+                    contents: val,
                 }
             }
         }

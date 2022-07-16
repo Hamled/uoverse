@@ -84,7 +84,7 @@ pub struct GameServerHandoff {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::packets::{FromPacketData, ToPacket};
+    use crate::packets::{FromPacketData, Packet};
     use crate::ser::to_writer;
     mod login_rejection {
         use super::*;
@@ -96,10 +96,9 @@ mod tests {
             let mut packet = Vec::<u8>::new();
             to_writer(
                 &mut packet,
-                &LoginRejection {
+                &Packet::<_>::from(&LoginRejection {
                     reason: LoginRejectionReason::Invalid,
-                }
-                .to_packet(),
+                }),
             )
             .expect("Failed to write packet");
 
@@ -150,11 +149,10 @@ mod tests {
             let mut packet = Vec::<u8>::new();
             to_writer(
                 &mut packet,
-                &ServerList {
+                &Packet::<_>::from(&ServerList {
                     flags: 0x5D,
                     list: servers().into(),
-                }
-                .to_packet(),
+                }),
             )
             .expect("Failed to write packet");
 
@@ -187,8 +185,7 @@ mod tests {
             };
 
             let mut packet = Vec::<u8>::new();
-            handoff
-                .to_packet()
+            Packet::<_>::from(&handoff)
                 .to_writer(&mut packet)
                 .expect("Failed to write packet");
 

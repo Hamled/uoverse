@@ -2,7 +2,7 @@ use futures::sink::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::StreamExt;
 use tokio_util::codec::Framed;
-use ultimaonline_net::{error::Result, packets::ToPacket};
+use ultimaonline_net::{error::Result, packets::Packet};
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
 
@@ -55,7 +55,8 @@ pub struct Login<Io: AsyncIo> {
 impl<Io: AsyncIo> Login<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::LoginEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::LoginEncode + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }
@@ -99,7 +100,8 @@ pub struct Handoff<Io: AsyncIo> {
 impl<Io: AsyncIo> Handoff<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::HandoffEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::HandoffEncode + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }

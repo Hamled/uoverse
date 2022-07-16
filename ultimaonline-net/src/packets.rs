@@ -1,5 +1,6 @@
 use crate::error::Result;
 use serde::Serialize;
+use std::io::{Read, Write};
 
 pub mod char_login;
 pub mod char_select;
@@ -8,31 +9,24 @@ pub mod mobile;
 pub mod world;
 
 #[derive(Serialize)]
-pub struct Packet<'a, T> {
+pub struct Packet<T> {
     id: u8,
     size: Option<u16>,
-    contents: &'a T,
+    contents: T,
 }
 
-impl<'a, T> Packet<'a, T>
+impl<T> Packet<T>
 where
     T: Serialize,
 {
-    pub fn to_writer<W: std::io::Write>(&'a self, writer: &mut W) -> Result<()> {
+    pub fn to_writer<W: Write>(&self, writer: &mut W) -> Result<()> {
         crate::ser::to_writer(writer, self)
     }
-}
-
-pub trait ToPacket<'a>
-where
-    Self: Sized,
-{
-    fn to_packet(&'a self) -> Packet<'a, Self>;
 }
 
 pub trait FromPacketData
 where
     Self: Sized,
 {
-    fn from_packet_data<R: std::io::Read>(reader: &mut R) -> Result<Self>;
+    fn from_packet_data<R: Read>(reader: &mut R) -> Result<Self>;
 }

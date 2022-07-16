@@ -3,7 +3,7 @@ use futures::sink::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Decoder, Encoder, Framed};
-use ultimaonline_net::{error::Result, packets::ToPacket};
+use ultimaonline_net::{error::Result, packets::Packet};
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
 
@@ -36,7 +36,8 @@ pub struct CharList<Io: AsyncIo> {
 impl<Io: AsyncIo> CharList<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::CharListEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::CharListEncode + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }
@@ -101,7 +102,8 @@ pub struct CharLogin<Io: AsyncIo> {
 impl<Io: AsyncIo> CharLogin<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::CharLoginEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::CharLoginEncode + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }
@@ -127,7 +129,8 @@ pub struct InWorld<Io: AsyncIo> {
 impl<Io: AsyncIo> InWorld<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::InWorldEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::InWorldEncode + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }

@@ -210,7 +210,7 @@ pub struct VersionResp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::packets::{FromPacketData, ToPacket};
+    use crate::packets::{FromPacketData, Packet};
 
     mod version_resp {
         use super::*;
@@ -222,8 +222,7 @@ mod tests {
             };
 
             let mut packet = Vec::<u8>::new();
-            version
-                .to_packet()
+            Packet::<_>::from(&version)
                 .to_writer(&mut packet)
                 .expect("Failed to write packet");
 
