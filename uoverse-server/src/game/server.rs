@@ -36,10 +36,31 @@ impl Server {
     }
 
     pub async fn run_loop(&self) -> Result<()> {
+        use ultimaonline_net::{packets::mobile, types};
+
         let mut frame = 0;
         while !self.shutdown.load(Ordering::Relaxed) {
             frame += 1;
             println!("Frame: {}", frame);
+            {
+                let mut world = self
+                    .world
+                    .lock()
+                    .map_err(|_| Error::Message("Unable to lock world".to_string()))?;
+                if (frame / 10) % 2 == 0 {
+                    world.mob_x += 1;
+                } else {
+                    world.mob_x -= 1;
+                }
+
+                if frame % 10 == 0 {
+                    world.mob_dir = match world.mob_dir {
+                        Direction::East => Direction::West,
+                        Direction::West => Direction::East,
+                        _ => Direction::East,
+                    };
+                }
+            }
 
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
