@@ -1,12 +1,23 @@
-use std::net::SocketAddrV4;
-use std::{convert::TryInto, env, net::Ipv4Addr};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use std::{
+    convert::TryInto,
+    env,
+    net::{Ipv4Addr, SocketAddrV4},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+use tokio::net::TcpListener;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::Notify,
+};
 use ultimaonline_net::{
     error::{Error, Result},
     types::Serial,
 };
 use uoverse_server::game::client::{self, *};
+use uoverse_server::game::server;
 
 const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 const DEFAULT_LISTEN_PORT: u16 = 2594;
@@ -32,28 +43,69 @@ pub async fn main() {
 
     println!("Game server listening on {}", listen_socket);
 
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_notice = Arc::new(Notify::new());
+    {
+        let shutdown = shutdown.clone();
+        let shutdown_notice = shutdown_notice.clone();
+        ctrlc::set_handler(move || {
+            shutdown.store(true, Ordering::Relaxed);
+            shutdown_notice.notify_one();
+        })
+        .expect("Error setting Ctrl-C signal handler");
+    }
+
+    let server = Arc::new(server::Server::new(shutdown.clone()));
+    let server_task = {
+        let server = server.clone();
+        tokio::spawn(async move { server.run_loop().await })
+    };
+
     loop {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        tokio::spawn(async move {
-            match process(&mut socket).await {
-                Err(Error::Data(err)) => println!("Client had error: {}", err),
-                Err(Error::Io(err)) => println!("Client had error: {}", err),
-                Err(Error::Message(err)) => println!("Client had error: {}", err),
-                Ok(()) => {
-                    println!("Client disconnected.");
-                    socket.shutdown().await.unwrap();
-                }
+        tokio::select! {
+            Ok((mut socket, _)) = listener.accept() => {
+                let server = server.clone();
+                tokio::spawn(async move {
+                    match preworld(&mut socket).await {
+                        Err(Error::Data(err)) => println!("Client had error in pre-world: {}", err),
+                        Err(Error::Io(err)) => println!("Client had error in pre-world: {}", err),
+                        Err(Error::Message(err)) => println!("Client had error in pre-world: {}", err),
+                        Ok(state) => {
+                            println!("Client completed pre-world.");
+                            match in_world(server, state).await {
+                                Err(err) => println!("Client had error in-world: {}", err),
+                                Ok(()) => {
+                                    println!("Client disconnected.");
+                                    socket.shutdown().await.unwrap();
+                                }
+                            }
+                        }
+                    }
+                });
             }
-        });
+
+            _ = shutdown_notice.notified() => {
+                println!("Stopped listening on {}", listen_socket);
+                break;
+            }
+        }
+    }
+
+    match server_task.await.expect("Error joining server task") {
+        Err(Error::Message(err)) => println!("Server task had error: {}", err),
+        Err(Error::Io(err)) => println!("Server task had error: {}", err),
+        Err(Error::Data(err)) => println!("Server task had error: {}", err),
+        Ok(()) => {
+            println!("Shutdown complete.");
+        }
     }
 }
 
-async fn process(socket: &mut TcpStream) -> Result<()> {
+async fn preworld<Io: AsyncIo>(socket: Io) -> Result<InWorld<Io>> {
     let state = handshake(socket).await?;
     let state = char_login(state).await?;
-    in_world(state).await?;
 
-    Ok(())
+    Ok(state)
 }
 
 const PLAYER_SERIAL: Serial = 3833;
@@ -68,7 +120,7 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
 
     let mut state = Connected::new(socket);
     let login = match state.recv().await? {
-        Some(codecs::ConnectedFrame::GameLogin(login)) => login,
+        Some(codecs::ConnectedFrameRecv::GameLogin(login)) => login,
         _ => return Err(Error::data("Did not get GameLogin packet")),
     };
 
@@ -220,7 +272,9 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
 
     let mut state = ClientVersion::<Io>::from(state);
     let version = match state.recv().await? {
-        Some(codecs::ClientVersionFrame::VersionResp(packets::VersionResp { version })) => version,
+        Some(codecs::ClientVersionFrameRecv::VersionResp(packets::VersionResp { version })) => {
+            version
+        }
         _ => return Err(Error::data("Did not get VersionResp packet")),
     };
 
@@ -232,7 +286,7 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
 async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io>> {
     use ultimaonline_net::{packets::*, types};
     let create_info = match state.recv().await? {
-        Some(codecs::CharSelectFrame::CreateCharacter(info)) => info,
+        Some(codecs::CharSelectFrameRecv::CreateCharacter(info)) => info,
         _ => return Err(Error::data("Did not get CreateCharacter packet")),
     };
 
@@ -261,21 +315,6 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
             unknown_15: [0u8; 14],
         })
         .await?;
-
-    Ok(InWorld::<Io>::from(state))
-}
-
-async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
-    use ultimaonline_net::{packets::*, types};
-
-    state
-        .send(&mobile::MobLightLevel {
-            serial: PLAYER_SERIAL,
-            level: 30,
-        })
-        .await?;
-
-    state.send(&world::WorldLightLevel { level: 30 }).await?;
 
     // Character status
     state
@@ -322,92 +361,41 @@ async fn in_world<Io: AsyncIo>(mut state: InWorld<Io>) -> Result<()> {
         })
         .await?;
 
-    let mut mob_x = 3668;
-    let mut mob_dir = types::Direction::East;
-    state
-        .send(&mobile::Appearance {
-            state: mobile::State {
-                serial: 55858,
-                body: 401,
-                x: mob_x,
-                y: 2625,
-                z: 0,
-                direction: mob_dir,
-                hue: 1003,
-                flags: mobile::EntityFlags::None,
-                notoriety: types::Notoriety::Ally,
-            },
-            items: vec![
-                mobile::Item {
-                    serial: 0x40000001,
-                    type_id: 0x1EFD, // Fancy Shirt
-                    layer: 0x05,     // Shirt
-                    hue: 1837,
-                },
-                mobile::Item {
-                    serial: 0x40000002,
-                    type_id: 0x1539, // Long Pants
-                    layer: 0x04,     // Pants
-                    hue: 1897,
-                },
-                mobile::Item {
-                    serial: 0x40000003,
-                    type_id: 0x170B, // Boots
-                    layer: 0x04,     // Shoes
-                    hue: 1900,
-                },
-                mobile::Item {
-                    serial: 0x40000004,
-                    type_id: 0x1515, // Cloak
-                    layer: 0x14,     // Cloak
-                    hue: 1811,
-                },
-                mobile::Item {
-                    serial: 0x40000005,
-                    type_id: 0x203C, // Long hair
-                    layer: 0x0B,     // Hair
-                    hue: 1111,
-                },
-            ]
-            .into(),
-        })
-        .await?;
-
-    // TODO: Send lots of other stuff here
     state.send(&char_login::LoginComplete {}).await?;
 
-    let mut frame_count = 0;
+    Ok(InWorld::<Io>::from(state))
+}
+
+async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<Io>) -> Result<()> {
+    let mut client = server.new_client()?;
+
     loop {
-        frame_count += 1;
+        tokio::select! {
+            res = state.recv() => {
+                match res {
+                    Ok(Some(packet)) => client.send(packet)?,
+                    Ok(None) => {
+                        println!("Client connection closed.");
+                        break;
+                    },
+                    Err(err) => {
+                        println!("Client had error in-world: {}", err);
+                    }
+                }
+            },
 
-        if (frame_count / 10) % 2 == 0 {
-            mob_x += 1;
-        } else {
-            mob_x -= 1;
-        }
-
-        if frame_count % 10 == 0 {
-            mob_dir = match mob_dir {
-                types::Direction::East => types::Direction::West,
-                types::Direction::West => types::Direction::East,
-                _ => types::Direction::East,
+            packet = client.receiver.recv() => {
+                match packet {
+                    Some(packet) => state.send_frame(&packet).await?,
+                    None => {
+                        // TODO: Send packets that inform the client of removal
+                        println!("Client removed from world.");
+                        break;
+                    }
+                }
             }
         }
-
-        state
-            .send(&mobile::State {
-                serial: 55858,
-                body: 401,
-                x: mob_x,
-                y: 2625,
-                z: 0,
-                direction: mob_dir,
-                hue: 1003,
-                flags: mobile::EntityFlags::None,
-                notoriety: types::Notoriety::Ally,
-            })
-            .await?;
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
+
+    Ok(())
 }

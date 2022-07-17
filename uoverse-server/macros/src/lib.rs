@@ -54,8 +54,8 @@ impl Parse for CodecDef {
         Ok(CodecDef {
             visibility,
             name,
-            send_pkts: send_pkts,
-            recv_pkts: recv_pkts,
+            send_pkts,
+            recv_pkts,
         })
     }
 }
@@ -66,26 +66,38 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
     let vis = codec_def.visibility;
     let codec_name = codec_def.name;
+    let frame_name = Ident::new(&format!("{}FrameRecv", codec_name), codec_name.span());
 
-    let decoder = if !codec_def.recv_pkts.is_empty() {
-        let frame_name = Ident::new(&format!("{}Frame", codec_name), codec_name.span());
-        let pkts = codec_def.recv_pkts.iter();
-        let variants = codec_def
-            .recv_pkts
-            .iter()
-            .map(|p| &p.segments.last().unwrap().ident);
-        let frame = quote! {
-            pub enum #frame_name {
-                #( #variants(#pkts) ),*
+    let decoder = {
+        let frame = {
+            let pkts = codec_def.recv_pkts.iter();
+            let variants = codec_def
+                .recv_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+                #vis enum #frame_name {
+                    #( #variants(#pkts) ),*
+                }
             }
         };
 
-        let pkts = codec_def.recv_pkts.iter();
-        let names = codec_def
-            .recv_pkts
-            .iter()
-            .map(|p| &p.segments.last().unwrap().ident);
-        let decoder_impl = quote! {
+        let id_match_arms = if !codec_def.recv_pkts.is_empty() {
+            let pkts = codec_def.recv_pkts.iter();
+            let names = codec_def
+                .recv_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+               #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+            }
+        } else {
+            quote! {}
+        };
+
+        quote! {
+            #frame
+
             impl ::tokio_util::codec::Decoder for #codec_name {
                 type Item = #frame_name;
                 type Error = ::ultimaonline_net::error::Error;
@@ -100,25 +112,64 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     let packet_id = src[0];
 
                     // match that to the appropriate packet, or error if none matches
-
                     match packet_id {
-                        #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+                        #id_match_arms
                         _ => Err(::ultimaonline_net::error::Error::data(format!("Unexpected packet ID: {}", packet_id))),
                     }
                 }
             }
-        };
-
-        quote! {
-            #frame
-            #decoder_impl
         }
-    } else {
-        quote! {}
     };
 
-    let encoder = if !codec_def.send_pkts.is_empty() {
-        let trait_name = Ident::new(&format!("{}Encode", codec_name), codec_name.span());
+    let encoder = {
+        let trait_name = Ident::new(&format!("{}PacketSend", codec_name), codec_name.span());
+        let frame_name = Ident::new(&format!("{}FrameSend", codec_name), codec_name.span());
+
+        let frame = {
+            let pkts = codec_def.send_pkts.iter();
+            let variants = codec_def
+                .send_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            let enum_def = quote! {
+                #vis enum #frame_name {
+                    #( #variants(#pkts) ),*
+                }
+            };
+
+            let pkts = codec_def.send_pkts.iter();
+            let variants = codec_def
+                .send_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            let impls = quote! {
+                #(
+                    impl From<#pkts> for #frame_name {
+                        fn from(val: #pkts) -> Self {
+                            Self::#variants(val)
+                        }
+                    }
+                )*
+            };
+
+            quote! {
+                #enum_def
+                #impls
+            }
+        };
+
+        let frame_match_arms = if !codec_def.send_pkts.is_empty() {
+            let names = codec_def
+                .send_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            quote! {
+               #( #names(content) => ::ultimaonline_net::packets::write_packet(content, &mut dst.writer()) ),*,
+            }
+        } else {
+            quote! {}
+        };
+
         let pkts = codec_def.send_pkts.iter();
         quote! {
             #vis trait #trait_name {}
@@ -127,21 +178,35 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
             impl<'a, P> ::tokio_util::codec::Encoder<&'a P> for #codec_name
             where
-                P: #trait_name + ::ultimaonline_net::packets::ToPacket<'a> + ::serde::ser::Serialize
+                P: #trait_name + ::serde::ser::Serialize,
+                ::ultimaonline_net::packets::Packet<&'a P>: ::std::convert::From<&'a P>,
             {
                 type Error = ::ultimaonline_net::error::Error;
 
                 fn encode(&mut self, pkt: &'a P, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
                     use ::bytes::BufMut;
-                    use ::ultimaonline_net::packets::ToPacket;
 
-                    pkt.to_packet().to_writer(&mut dst.writer())?;
-                    Ok(())
+                    ::ultimaonline_net::packets::write_packet(pkt, &mut dst.writer())
                 }
             }
+
+            #frame
+
+            impl<'a> ::tokio_util::codec::Encoder<&'a #frame_name> for #codec_name {
+                type Error = ::ultimaonline_net::error::Error;
+
+                fn encode(&mut self, pkt: &'a #frame_name, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
+                    use ::bytes::BufMut;
+                    use #frame_name::*;
+
+                    match pkt {
+                        #frame_match_arms
+                        _ => unreachable!(),
+                    }
+                }
+            }
+
         }
-    } else {
-        quote! {}
     };
 
     let output = quote! {

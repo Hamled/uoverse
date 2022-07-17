@@ -2,7 +2,7 @@ use futures::sink::SinkExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::StreamExt;
 use tokio_util::codec::Framed;
-use ultimaonline_net::{error::Result, packets::ToPacket};
+use ultimaonline_net::{error::Result, packets::Packet};
 
 pub trait AsyncIo = AsyncRead + AsyncWrite + Unpin + Send + Sync;
 
@@ -15,7 +15,7 @@ pub struct Connected<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> Connected<Io> {
-    pub async fn recv(&mut self) -> Result<Option<codecs::ConnectedFrame>> {
+    pub async fn recv(&mut self) -> Result<Option<codecs::ConnectedFrameRecv>> {
         self.framer.try_next().await
     }
 
@@ -33,7 +33,7 @@ pub struct Hello<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> Hello<Io> {
-    pub async fn recv(&mut self) -> Result<Option<codecs::HelloFrame>> {
+    pub async fn recv(&mut self) -> Result<Option<codecs::HelloFrameRecv>> {
         self.framer.try_next().await
     }
 }
@@ -55,7 +55,8 @@ pub struct Login<Io: AsyncIo> {
 impl<Io: AsyncIo> Login<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::LoginEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::LoginPacketSend + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }
@@ -76,7 +77,7 @@ pub struct ServerSelect<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> ServerSelect<Io> {
-    pub async fn recv(&mut self) -> Result<Option<codecs::ServerSelectFrame>> {
+    pub async fn recv(&mut self) -> Result<Option<codecs::ServerSelectFrameRecv>> {
         self.framer.try_next().await
     }
 }
@@ -99,7 +100,8 @@ pub struct Handoff<Io: AsyncIo> {
 impl<Io: AsyncIo> Handoff<Io> {
     pub async fn send<'a, P>(&mut self, pkt: &'a P) -> Result<()>
     where
-        P: codecs::HandoffEncode + ToPacket<'a> + ::serde::ser::Serialize,
+        P: codecs::HandoffPacketSend + ::serde::ser::Serialize,
+        Packet<&'a P>: From<&'a P>,
     {
         self.framer.send(pkt).await
     }
