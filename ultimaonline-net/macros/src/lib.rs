@@ -8,6 +8,8 @@ struct PacketArgs {
     id: u8,
     #[darling(default)]
     var_size: bool,
+    #[darling(default)]
+    extended_id: u16,
 }
 
 #[proc_macro_attribute]
@@ -21,14 +23,30 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
     let packet_id = args.id;
+    let extended_id = if args.extended_id == Default::default() {
+        None
+    } else {
+        Some(args.extended_id)
+    };
+    let var_size = extended_id.is_some() || args.var_size;
 
     let main_struct = parse_macro_input!(item as ItemStruct);
     let main_ident = &main_struct.ident;
 
-    let from_value = packet_from_content(&parse_quote! {#main_ident}, packet_id, args.var_size);
-    let from_ref = packet_from_content(&parse_quote! {&'a #main_ident}, packet_id, args.var_size);
+    let from_value = packet_from_content(
+        &parse_quote! {#main_ident},
+        packet_id,
+        extended_id,
+        var_size,
+    );
+    let from_ref = packet_from_content(
+        &parse_quote! {&'a #main_ident},
+        packet_id,
+        extended_id,
+        var_size,
+    );
 
-    let fromdata_impl = content_from_packet(main_ident, packet_id, args.var_size);
+    let fromdata_impl = content_from_packet(main_ident, packet_id, extended_id, var_size);
 
     quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
@@ -47,7 +65,12 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-fn packet_from_content(content_type: &Type, id: u8, var_size: bool) -> proc_macro2::TokenStream {
+fn packet_from_content(
+    content_type: &Type,
+    id: u8,
+    extended_id: Option<u16>,
+    var_size: bool,
+) -> proc_macro2::TokenStream {
     let (impl_param, to_size_param) = match content_type {
         Type::Reference(r) => (
             match &r.lifetime {
@@ -66,8 +89,8 @@ fn packet_from_content(content_type: &Type, id: u8, var_size: bool) -> proc_macr
             quote! {
                 let size = crate::ser::to_size(#to_size_param).expect("Could not serialize packet for size");
                 let size = ::core::mem::size_of::<u8>() + // packet id
-                            ::core::mem::size_of::<u16>() + // packet size
-                            size;
+                           ::core::mem::size_of::<u16>() + // packet size
+                           size;
             },
             quote! {
                size: Some(size as u16)
@@ -77,22 +100,41 @@ fn packet_from_content(content_type: &Type, id: u8, var_size: bool) -> proc_macr
         (quote! {}, quote! {size: None})
     };
 
+    let from_type = content_type;
+    let (size_calc, content_type, content_val) = match extended_id {
+        Some(id) => (
+            quote! {
+                #size_calc
+                let size = ::core::mem::size_of::<u16>() + // extended id
+                           size;
+            },
+            quote! {(u16, #content_type)},
+            quote! {(#id, val)},
+        ),
+        None => (size_calc, quote! {#content_type}, quote! {val}),
+    };
+
     quote! {
-        impl#impl_param ::std::convert::From<#content_type> for crate::packets::Packet<#content_type> {
-            fn from(val: #content_type) -> Self {
+        impl#impl_param ::std::convert::From<#from_type> for crate::packets::Packet<#content_type> {
+            fn from(val: #from_type) -> Self {
                 #size_calc
 
                 crate::packets::Packet {
                     id: #id,
                     #size_field,
-                    contents: val,
+                    contents: #content_val,
                 }
             }
         }
     }
 }
 
-fn content_from_packet(name: &syn::Ident, id: u8, var_size: bool) -> proc_macro2::TokenStream {
+fn content_from_packet(
+    name: &syn::Ident,
+    id: u8,
+    extended_id: Option<u16>,
+    var_size: bool,
+) -> proc_macro2::TokenStream {
     let size_check = if var_size {
         quote! {
             // TODO: Actually check this length value
@@ -100,6 +142,17 @@ fn content_from_packet(name: &syn::Ident, id: u8, var_size: bool) -> proc_macro2
         }
     } else {
         quote! {}
+    };
+
+    let read_extended_id = match extended_id {
+        Some(id) => quote! {
+            // Parse out the extended id
+            let extended_id = reader.read_u16::<BigEndian>().map_err(Error::io)?;
+            if(extended_id != #id) {
+                return Err(Error::data(format!("Packet extended ID {:#0X} did not match expected {:#0X}", extended_id, #id)));
+            }
+        },
+        None => quote! {},
     };
 
     quote! {
@@ -115,6 +168,8 @@ fn content_from_packet(name: &syn::Ident, id: u8, var_size: bool) -> proc_macro2
                 }
 
                 #size_check
+
+                #read_extended_id
 
                 crate::de::from_reader(reader)
             }
