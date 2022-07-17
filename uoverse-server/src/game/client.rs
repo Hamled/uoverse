@@ -281,9 +281,22 @@ pub mod codecs {
             mobile::Appearance,
             mobile::MobLightLevel,
             mobile::State,
+            network::PingAck,
             world::WorldLightLevel,
         ],
-        recv []
+        recv [
+            action::ClickUse,
+            action::ClickLook,
+            char_select::VersionResp,
+            chat::OpenWindow,
+            client_info::Flags,
+            client_info::Language,
+            client_info::WindowSize,
+            client_info::ViewRange,
+            housing::ShowPublicContent,
+            mobile::Query,
+            network::PingReq
+        ]
     }
 }
 

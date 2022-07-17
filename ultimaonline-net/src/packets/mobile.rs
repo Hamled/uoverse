@@ -49,3 +49,17 @@ pub struct Appearance {
     pub state: State,
     pub items: ListTerm<Item, 32>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum QueryKind {
+    Status = 0x4,
+    Skills = 0x5,
+}
+
+#[packet(standard(id = 0x34))]
+pub struct Query {
+    pub unused: u32, // 0xEDEDEDED
+    pub kind: QueryKind,
+    pub serial: Serial,
+}

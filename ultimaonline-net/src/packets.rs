@@ -2,10 +2,15 @@ use crate::error::Result;
 use serde::Serialize;
 use std::io::{Read, Write};
 
+pub mod action;
 pub mod char_login;
 pub mod char_select;
+pub mod chat;
+pub mod client_info;
+pub mod housing;
 pub mod login;
 pub mod mobile;
+pub mod network;
 pub mod world;
 
 pub const EXTENDED_PACKET_ID: u8 = 0xBF;

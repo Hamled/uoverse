@@ -367,12 +367,18 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
 }
 
 async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<Io>) -> Result<()> {
+    use codecs::InWorldFrameRecv;
+    use ultimaonline_net::packets::network::{PingAck, PingReq};
+
     let mut client = server.new_client()?;
 
     loop {
         tokio::select! {
             res = state.recv() => {
                 match res {
+                    Ok(Some(InWorldFrameRecv::PingReq(PingReq {val}))) => {
+                        state.send(&PingAck{val}).await?
+                    },
                     Ok(Some(packet)) => client.send(packet)?,
                     Ok(None) => {
                         println!("Client connection closed.");
