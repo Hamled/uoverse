@@ -60,6 +60,32 @@ impl Server {
                         _ => Direction::East,
                     };
                 }
+
+                let mut clients = self
+                    .clients
+                    .lock()
+                    .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?;
+
+                for (i, client) in clients.iter_mut().enumerate() {
+                    if client.sender.is_closed() {
+                        continue;
+                    }
+
+                    client.send(
+                        mobile::State {
+                            serial: 55858,
+                            body: 401,
+                            x: world.mob_x,
+                            y: 2625,
+                            z: 0,
+                            direction: world.mob_dir,
+                            hue: 1003,
+                            flags: mobile::EntityFlags::None,
+                            notoriety: types::Notoriety::Ally,
+                        }
+                        .into(),
+                    )?;
+                }
             }
 
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
