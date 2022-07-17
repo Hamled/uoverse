@@ -131,10 +131,30 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 .send_pkts
                 .iter()
                 .map(|p| &p.segments.last().unwrap().ident);
-            quote! {
+            let enum_def = quote! {
                 #vis enum #frame_name {
                     #( #variants(#pkts) ),*
                 }
+            };
+
+            let pkts = codec_def.send_pkts.iter();
+            let variants = codec_def
+                .send_pkts
+                .iter()
+                .map(|p| &p.segments.last().unwrap().ident);
+            let impls = quote! {
+                #(
+                    impl From<#pkts> for #frame_name {
+                        fn from(val: #pkts) -> Self {
+                            Self::#variants(val)
+                        }
+                    }
+                )*
+            };
+
+            quote! {
+                #enum_def
+                #impls
             }
         };
 
