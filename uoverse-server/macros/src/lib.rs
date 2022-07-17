@@ -89,7 +89,7 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 .iter()
                 .map(|p| &p.segments.last().unwrap().ident);
             quote! {
-               #( #pkts::PACKET_ID => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+               #( (#pkts::PACKET_ID, #pkts::EXTENDED_ID) => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
             }
         } else {
             quote! {}
@@ -103,18 +103,28 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 type Error = ::ultimaonline_net::error::Error;
 
                 fn decode(&mut self, src: &mut ::bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+                    use ::std::convert::TryInto;
                     use ::bytes::Buf;
-                    use ::ultimaonline_net::packets::FromPacketData;
+                    use ::ultimaonline_net::packets::{self, FromPacketData};
                     use #frame_name::*;
 
                     // Peek at the first byte
-                    if(src.len() < 1) { return Ok(None); }
+                    if src.len() < 1 { return Ok(None); }
                     let packet_id = src[0];
 
+                    // Peek for extended packet id
+                    let extended_id = match packet_id {
+                        packets::EXTENDED_PACKET_ID => {
+                            if src.len() < 5 { return Ok(None); }
+                            Some(u16::from_be_bytes(src[3..5].try_into().unwrap()))
+                        },
+                        _ => None
+                    };
+
                     // match that to the appropriate packet, or error if none matches
-                    match packet_id {
+                    match (packet_id, extended_id) {
                         #id_match_arms
-                        _ => Err(::ultimaonline_net::error::Error::data(format!("Unexpected packet ID: {}", packet_id))),
+                        _ => Err(Self::Error::data(format!("Unexpected packet ID: {:#0X}", packet_id))),
                     }
                 }
             }
