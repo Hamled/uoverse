@@ -3,19 +3,19 @@ use macros::packet;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[packet(id = 0x91)]
+#[packet(standard(id = 0x91))]
 pub struct GameLogin {
     pub seed: u32,
     pub username: FixedStr<30>,
     pub password: FixedStr<30>,
 }
 
-#[packet(id = 0xB9)]
+#[packet(standard(id = 0xB9))]
 pub struct Features {
     pub flags: u32,
 }
 
-#[packet(id = 0xA9, var_size = true)]
+#[packet(standard(id = 0xA9, var_size = true))]
 pub struct CharList {
     pub chars: List<CharInfo, 8>,
     pub cities: List<CityInfo, 8>,
@@ -169,7 +169,7 @@ pub struct Character {
     appearance: CharAppearance,
 }
 
-#[packet(id = 0xF8)]
+#[packet(standard(id = 0xF8))]
 pub struct CreateCharacter {
     unknown_00: u32, // 0xEDEDEDED
     unknown_04: u16, // 0xFFFF
@@ -196,12 +196,12 @@ pub struct CreateCharacter {
     pants_hue: Hue,
 }
 
-#[packet(id = 0xBD)]
+#[packet(standard(id = 0xBD))]
 pub struct VersionReq {
     pub unknown_00: u16, // 0x0003
 }
 
-#[packet(id = 0xBD, var_size = true)]
+#[packet(standard(id = 0xBD, var_size = true))]
 #[derive(Debug, PartialEq)]
 pub struct VersionResp {
     pub version: String,

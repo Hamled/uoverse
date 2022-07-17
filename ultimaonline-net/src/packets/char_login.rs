@@ -14,7 +14,7 @@ pub enum BodyType {
     Equipment,
 }
 
-#[packet(id = 0x1B)]
+#[packet(standard(id = 0x1B))]
 pub struct LoginConfirmation {
     pub serial: Serial,
 
@@ -31,7 +31,7 @@ pub struct LoginConfirmation {
     pub unknown_15: [u8; 14], // All zero
 }
 
-#[packet(id = 0x55)]
+#[packet(standard(id = 0x55))]
 pub struct LoginComplete;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -43,7 +43,7 @@ pub struct Attribute {
 pub type Stat = u16;
 pub type Resistance = u16;
 
-#[packet(id = 0x11, var_size = true)]
+#[packet(standard(id = 0x11, var_size = true))]
 pub struct CharStatus {
     pub serial: Serial,
     pub name: Name,
