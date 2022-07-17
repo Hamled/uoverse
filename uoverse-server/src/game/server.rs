@@ -5,14 +5,20 @@ use std::sync::{
 use tokio::sync::mpsc;
 use ultimaonline_net::{
     error::{Error, Result},
-    types::Serial,
+    types::{Direction, Serial},
 };
 
 use super::client::{Client, ClientReceiver, ClientSender, WorldClient};
 
+struct World {
+    mob_x: u16,
+    mob_dir: Direction,
+}
+
 pub struct Server {
     shutdown: Arc<AtomicBool>,
     clients: Mutex<Vec<WorldClient>>,
+    world: Mutex<World>,
 }
 
 const PLAYER_SERIAL: Serial = 3833;
@@ -22,6 +28,10 @@ impl Server {
         Server {
             shutdown,
             clients: Mutex::new(vec![]),
+            world: Mutex::new(World {
+                mob_x: 3668,
+                mob_dir: Direction::East,
+            }),
         }
     }
 
@@ -37,7 +47,7 @@ impl Server {
         for client in self
             .clients
             .lock()
-            .map_err(|_| Error::Message("Couldn't lock clients vec".to_string()))?
+            .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?
             .iter_mut()
         {
             client.close();
@@ -59,6 +69,7 @@ impl Server {
         };
 
         self.enter_world(&mut client)?;
+        println!("Client completed enter world.");
 
         self.clients
             .lock()
@@ -84,17 +95,20 @@ impl Server {
 
         client.send(world::WorldLightLevel { level: 30 }.into())?;
 
-        let mob_x = 3668;
-        let mob_dir = types::Direction::East;
+        let world = self
+            .world
+            .lock()
+            .map_err(|_| Error::Message("Unable to lock world".to_string()))?;
+
         client.send(
             mobile::Appearance {
                 state: mobile::State {
                     serial: 55858,
                     body: 401,
-                    x: mob_x,
+                    x: world.mob_x,
                     y: 2625,
                     z: 0,
-                    direction: mob_dir,
+                    direction: world.mob_dir,
                     hue: 1003,
                     flags: mobile::EntityFlags::None,
                     notoriety: types::Notoriety::Ally,
