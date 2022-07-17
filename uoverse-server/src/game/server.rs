@@ -34,6 +34,15 @@ impl Server {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
 
+        for client in self
+            .clients
+            .lock()
+            .map_err(|_| Error::Message("Couldn't lock clients vec".to_string()))?
+            .iter_mut()
+        {
+            client.close();
+        }
+
         println!("Server shutting down.");
         Ok(())
     }

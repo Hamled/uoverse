@@ -384,8 +384,15 @@ async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<I
                 }
             },
 
-            Some(packet) = client.receiver.recv() => {
-                state.send_frame(&packet).await?;
+            packet = client.receiver.recv() => {
+                match packet {
+                    Some(packet) => state.send_frame(&packet).await?,
+                    None => {
+                        // TODO: Send packets that inform the client of removal
+                        println!("Client removed from world.");
+                        break;
+                    }
+                }
             }
         }
     }

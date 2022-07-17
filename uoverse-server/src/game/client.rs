@@ -169,6 +169,8 @@ pub trait ClientSender {
 pub trait ClientReceiver {
     type RecvItem;
     fn recv(&mut self) -> Result<Self::RecvItem>;
+
+    fn close(&mut self);
 }
 
 pub struct Client {
@@ -192,6 +194,10 @@ impl ClientReceiver for Client {
             .try_recv()
             .map_err(|_| Error::Message("TODO: MPSC recv error".to_string()))
     }
+
+    fn close(&mut self) {
+        self.receiver.close();
+    }
 }
 
 pub struct WorldClient {
@@ -214,6 +220,10 @@ impl ClientReceiver for WorldClient {
         self.receiver
             .try_recv()
             .map_err(|_| Error::Message("TODO: MPSC recv error".to_string()))
+    }
+
+    fn close(&mut self) {
+        self.receiver.close();
     }
 }
 
