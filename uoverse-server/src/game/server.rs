@@ -5,14 +5,20 @@ use std::sync::{
 use tokio::sync::mpsc;
 use ultimaonline_net::{
     error::{Error, Result},
-    types::Serial,
+    types::{Direction, Serial},
 };
 
 use super::client::{Client, ClientReceiver, ClientSender, WorldClient};
 
+struct World {
+    mob_x: u16,
+    mob_dir: Direction,
+}
+
 pub struct Server {
     shutdown: Arc<AtomicBool>,
     clients: Mutex<Vec<WorldClient>>,
+    world: Mutex<World>,
 }
 
 const PLAYER_SERIAL: Serial = 3833;
@@ -22,14 +28,73 @@ impl Server {
         Server {
             shutdown,
             clients: Mutex::new(vec![]),
+            world: Mutex::new(World {
+                mob_x: 3668,
+                mob_dir: Direction::East,
+            }),
         }
     }
 
     pub async fn run_loop(&self) -> Result<()> {
+        use ultimaonline_net::{packets::mobile, types};
+
         let mut frame = 0;
         while !self.shutdown.load(Ordering::Relaxed) {
             frame += 1;
             println!("Frame: {}", frame);
+            {
+                let mut world = self
+                    .world
+                    .lock()
+                    .map_err(|_| Error::Message("Unable to lock world".to_string()))?;
+                if (frame / 10) % 2 == 0 {
+                    world.mob_x += 1;
+                } else {
+                    world.mob_x -= 1;
+                }
+
+                if frame % 10 == 0 {
+                    world.mob_dir = match world.mob_dir {
+                        Direction::East => Direction::West,
+                        Direction::West => Direction::East,
+                        _ => Direction::East,
+                    };
+                }
+
+                let mut clients = self
+                    .clients
+                    .lock()
+                    .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?;
+
+                let mut closed_clients: Vec<usize> = vec![];
+                for (i, client) in clients.iter_mut().enumerate() {
+                    if client.sender.is_closed() {
+                        closed_clients.push(i);
+                        continue;
+                    }
+
+                    client.send(
+                        mobile::State {
+                            serial: 55858,
+                            body: 401,
+                            x: world.mob_x,
+                            y: 2625,
+                            z: 0,
+                            direction: world.mob_dir,
+                            hue: 1003,
+                            flags: mobile::EntityFlags::None,
+                            notoriety: types::Notoriety::Ally,
+                        }
+                        .into(),
+                    )?;
+                }
+
+                closed_clients.sort();
+                closed_clients.reverse();
+                for i in closed_clients {
+                    clients.remove(i);
+                }
+            }
 
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
@@ -37,7 +102,7 @@ impl Server {
         for client in self
             .clients
             .lock()
-            .map_err(|_| Error::Message("Couldn't lock clients vec".to_string()))?
+            .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?
             .iter_mut()
         {
             client.close();
@@ -59,6 +124,7 @@ impl Server {
         };
 
         self.enter_world(&mut client)?;
+        println!("Client completed enter world.");
 
         self.clients
             .lock()
@@ -84,17 +150,20 @@ impl Server {
 
         client.send(world::WorldLightLevel { level: 30 }.into())?;
 
-        let mob_x = 3668;
-        let mob_dir = types::Direction::East;
+        let world = self
+            .world
+            .lock()
+            .map_err(|_| Error::Message("Unable to lock world".to_string()))?;
+
         client.send(
             mobile::Appearance {
                 state: mobile::State {
                     serial: 55858,
                     body: 401,
-                    x: mob_x,
+                    x: world.mob_x,
                     y: 2625,
                     z: 0,
-                    direction: mob_dir,
+                    direction: world.mob_dir,
                     hue: 1003,
                     flags: mobile::EntityFlags::None,
                     notoriety: types::Notoriety::Ally,
