@@ -140,6 +140,14 @@ impl<Io: AsyncIo> InWorld<Io> {
     {
         self.framer.send(pkt).await
     }
+
+    pub async fn send_frame<'a>(&mut self, pkt: &'a codecs::InWorldFrameSend) -> Result<()> {
+        self.framer.send(pkt).await
+    }
+
+    pub async fn recv(&mut self) -> Result<Option<codecs::InWorldFrameRecv>> {
+        self.framer.try_next().await
+    }
 }
 
 impl<Io: AsyncIo> From<CharLogin<Io>> for InWorld<Io> {

@@ -366,8 +366,29 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
     Ok(InWorld::<Io>::from(state))
 }
 
-async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut _state: InWorld<Io>) -> Result<()> {
-    let mut _client = server.new_client()?;
+async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<Io>) -> Result<()> {
+    let mut client = server.new_client()?;
+
+    loop {
+        tokio::select! {
+            res = state.recv() => {
+                match res {
+                    Ok(Some(packet)) => client.send(packet)?,
+                    Ok(None) => {
+                        println!("Client connection closed.");
+                        break;
+                    },
+                    Err(err) => {
+                        println!("Client had error in-world: {}", err);
+                    }
+                }
+            },
+
+            Some(packet) = client.receiver.recv() => {
+                state.send_frame(&packet).await?;
+            }
+        }
+    }
 
     Ok(())
 }
