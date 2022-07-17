@@ -40,9 +40,14 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let fromdata_impl = content_from_packet(main_ident, &args);
 
-    let packet_id = match args {
-        PacketArgs::Standard(StandardPacket { id, .. }) => quote! {#id},
-        PacketArgs::Extended(_) => quote! {crate::packets::EXTENDED_PACKET_ID},
+    let (packet_id, extended_id) = match args {
+        PacketArgs::Standard(StandardPacket { id, .. }) => (quote! {#id}, quote! {None}),
+        PacketArgs::Extended(ExtendedPacket { id }) => (
+            quote! {crate::packets::EXTENDED_PACKET_ID},
+            quote! {
+                Some(#id)
+            },
+        ),
     };
 
     quote! {
@@ -51,6 +56,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 
         impl #main_ident {
             pub const PACKET_ID: u8 = #packet_id;
+            pub const EXTENDED_ID: Option<u16> = #extended_id;
         }
 
         #from_value
