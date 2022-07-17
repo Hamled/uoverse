@@ -22,13 +22,13 @@ impl std::fmt::Display for ClientVersion {
     }
 }
 
-#[packet(id = 0xEF)]
+#[packet(standard(id = 0xEF))]
 pub struct ClientHello {
     pub seed: u32,
     pub version: ClientVersion,
 }
 
-#[packet(id = 0x80)]
+#[packet(standard(id = 0x80))]
 pub struct AccountLogin {
     pub username: FixedStr<30>,
     pub password: FixedStr<30>,
@@ -47,7 +47,7 @@ pub enum LoginRejectionReason {
     BadComm = 255,
 }
 
-#[packet(id = 0x82)]
+#[packet(standard(id = 0x82))]
 #[derive(Debug, PartialEq)]
 pub struct LoginRejection {
     pub reason: LoginRejectionReason,
@@ -62,19 +62,19 @@ pub struct ServerInfo {
     pub ip_address: Ipv4Addr,
 }
 
-#[packet(id = 0xA8, var_size = true)]
+#[packet(standard(id = 0xA8, var_size = true))]
 #[derive(Debug, PartialEq)]
 pub struct ServerList {
     pub flags: u8,
     pub list: List<ServerInfo, 16>,
 }
 
-#[packet(id = 0xA0)]
+#[packet(standard(id = 0xA0))]
 pub struct ServerSelection {
     pub index: u16,
 }
 
-#[packet(id = 0x8C)]
+#[packet(standard(id = 0x8C))]
 #[derive(Debug, PartialEq)]
 pub struct GameServerHandoff {
     pub socket: SocketAddrV4,

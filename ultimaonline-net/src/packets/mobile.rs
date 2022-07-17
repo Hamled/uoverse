@@ -17,7 +17,7 @@ pub enum EntityFlags {
     Hidden = 0x80,
 }
 
-#[packet(id = 0x4E)]
+#[packet(standard(id = 0x4E))]
 pub struct MobLightLevel {
     pub serial: Serial,
     pub level: u8,
@@ -31,7 +31,7 @@ pub struct Item {
     pub hue: Hue,
 }
 
-#[packet(id = 0x77)]
+#[packet(standard(id = 0x77))]
 pub struct State {
     pub serial: Serial,
     pub body: Graphic,
@@ -44,7 +44,7 @@ pub struct State {
     pub notoriety: Notoriety,
 }
 
-#[packet(id = 0x78, var_size = true)]
+#[packet(standard(id = 0x78, var_size = true))]
 pub struct Appearance {
     pub state: State,
     pub items: ListTerm<Item, 32>,

@@ -8,6 +8,8 @@ pub mod login;
 pub mod mobile;
 pub mod world;
 
+pub const EXTENDED_PACKET_ID: u8 = 0xBF;
+
 #[derive(Serialize)]
 pub struct Packet<T> {
     id: u8,
