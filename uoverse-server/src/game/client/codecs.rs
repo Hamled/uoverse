@@ -54,6 +54,8 @@ define_codec! {
         mobile::Appearance,
         mobile::MobLightLevel,
         mobile::State,
+        movement::Success,
+        movement::Reject,
         network::PingAck,
         world::WorldLightLevel,
     ],
@@ -68,6 +70,7 @@ define_codec! {
         client_info::ViewRange,
         housing::ShowPublicContent,
         mobile::Query,
+        movement::Request,
         network::PingReq
     ]
 }

@@ -7,6 +7,9 @@ use std::fmt;
 pub mod list;
 pub use list::List;
 
+pub mod movement;
+pub use movement::{Movement, MovementRaw};
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FixedStr<const LEN: usize> {
     str: [u8; LEN],
@@ -110,8 +113,6 @@ pub enum Direction {
     Left,
     West,
     Up,
-
-    Running = 0x80,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]

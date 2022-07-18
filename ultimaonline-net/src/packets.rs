@@ -10,6 +10,7 @@ pub mod client_info;
 pub mod housing;
 pub mod login;
 pub mod mobile;
+pub mod movement;
 pub mod network;
 pub mod world;
 
