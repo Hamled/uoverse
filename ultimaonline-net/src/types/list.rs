@@ -1,65 +1,86 @@
 use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeStruct, Serializer};
-use std::fmt;
-use std::marker::PhantomData;
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt,
+    marker::PhantomData,
+};
+
+pub trait ListLen: TryFrom<u64> + Into<u64> {
+    const BITS: u32;
+}
+impl ListLen for u8 {
+    const BITS: u32 = u8::BITS;
+}
+impl ListLen for u16 {
+    const BITS: u32 = u16::BITS;
+}
+impl ListLen for u32 {
+    const BITS: u32 = u32::BITS;
+}
+impl ListLen for u64 {
+    const BITS: u32 = u64::BITS;
+}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct List<T, const LEN_BITS: usize>(Vec<T>);
+pub struct List<T, L: ListLen>(Vec<T>, PhantomData<L>);
 
-impl<T: Serialize, const LEN_BITS: usize> Serialize for List<T, LEN_BITS> {
+impl<T: Serialize, L: ListLen + Serialize> Serialize for List<T, L> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut struct_ser = serializer.serialize_struct("List", 2)?;
 
-        let len = self.0.len();
-        match LEN_BITS {
-            8 => struct_ser.serialize_field("length", &(len as u8))?,
-            16 => struct_ser.serialize_field("length", &(len as u16))?,
-            32 => struct_ser.serialize_field("length", &(len as u32))?,
-            64 => struct_ser.serialize_field("length", &(len as u64))?,
-            _ => {
-                return Err(ser::Error::custom(
-                    "List LEN_BITS must be one of: 8, 16, 32, 64",
-                ))
-            }
-        };
-
+        struct_ser.serialize_field::<L>(
+            "length",
+            &(self.0.len() as u64)
+                .try_into()
+                .or(Err(ser::Error::custom(format!(
+                    "List length cannot fit into {} bits",
+                    L::BITS
+                ))))?,
+        )?;
         struct_ser.serialize_field("elements", &self.0)?;
+
         struct_ser.end()
     }
 }
 
-impl<T, const LEN_BITS: usize> Default for List<T, LEN_BITS> {
+impl<T, L: ListLen> Default for List<T, L> {
     fn default() -> Self {
-        Self(Default::default())
+        Self(Default::default(), PhantomData)
     }
 }
 
-impl<T, const LEN_BITS: usize> From<Vec<T>> for List<T, LEN_BITS> {
+impl<T, L: ListLen> From<Vec<T>> for List<T, L> {
     fn from(val: Vec<T>) -> Self {
-        Self(val)
+        Self(val, PhantomData)
     }
 }
 
-impl<T, const LEN_BITS: usize> From<List<T, LEN_BITS>> for Vec<T> {
-    fn from(val: List<T, LEN_BITS>) -> Self {
+impl<T, L: ListLen> From<List<T, L>> for Vec<T> {
+    fn from(val: List<T, L>) -> Self {
         val.0
     }
 }
 
-struct ListVisitor<T, const LEN: usize> {
+struct ListVisitor<T, L> {
     element_type: PhantomData<T>,
+    length_type: PhantomData<L>,
 }
 
-impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de> for ListVisitor<T, LEN_BITS> {
-    type Value = List<T, LEN_BITS>;
+impl<'de, T, L> Visitor<'de> for ListVisitor<T, L>
+where
+    T: Deserialize<'de>,
+    L: ListLen + Deserialize<'de>,
+{
+    type Value = List<T, L>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
-            "a list prefixed with {}-bit length value",
-            LEN_BITS
+            "a list prefixed with a {}-bit length value",
+            L::BITS
         ))
     }
 
@@ -67,21 +88,14 @@ impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de> for ListVisit
     where
         A: SeqAccess<'de>,
     {
-        let len = match LEN_BITS {
-            8 => seq.next_element::<u8>()?.map(|len| len as usize),
-            16 => seq.next_element::<u16>()?.map(|len| len as usize),
-            32 => seq.next_element::<u32>()?.map(|len| len as usize),
-            64 => seq.next_element::<u64>()?.map(|len| len as usize),
-            _ => {
-                return Err(de::Error::custom(
-                    "List LEN_BITS must be one of: 8, 16, 32, 64",
-                ))
-            }
-        };
+        let len = seq
+            .next_element::<L>()?
+            .map(|len| len.into())
+            .ok_or(de::Error::invalid_length(0, &self))?;
 
         Ok(seq
             .next_element_seed(ListElements {
-                len: len.ok_or(de::Error::invalid_length(0, &self))?,
+                len: len as usize,
                 inner: Default::default(),
             })?
             .ok_or(de::Error::invalid_length(1, &self))?
@@ -89,7 +103,11 @@ impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de> for ListVisit
     }
 }
 
-impl<'de, T: 'de + Deserialize<'de>, const LEN_BITS: usize> Deserialize<'de> for List<T, LEN_BITS> {
+impl<'de, T, L> Deserialize<'de> for List<T, L>
+where
+    T: 'de + Deserialize<'de>,
+    L: 'de + ListLen + Deserialize<'de>,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -100,6 +118,7 @@ impl<'de, T: 'de + Deserialize<'de>, const LEN_BITS: usize> Deserialize<'de> for
             FIELDS,
             ListVisitor {
                 element_type: PhantomData,
+                length_type: PhantomData,
             },
         )
     }

@@ -17,8 +17,8 @@ pub struct Features {
 
 #[packet(standard(id = 0xA9, var_size = true))]
 pub struct CharList {
-    pub chars: List<CharInfo, 8>,
-    pub cities: List<CityInfo, 8>,
+    pub chars: List<CharInfo, u8>,
+    pub cities: List<CityInfo, u8>,
     pub flags: u32,
     pub unknown_var1: i32,
 }

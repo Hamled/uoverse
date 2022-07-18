@@ -66,7 +66,7 @@ pub struct ServerInfo {
 #[derive(Debug, PartialEq)]
 pub struct ServerList {
     pub flags: u8,
-    pub list: List<ServerInfo, 16>,
+    pub list: List<ServerInfo, u16>,
 }
 
 #[packet(standard(id = 0xA0))]
