@@ -1,4 +1,4 @@
-use serde::de::{self, Deserialize, Deserializer, SeqAccess, Visitor};
+use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{self, Serialize, SerializeStruct, Serializer};
 use std::fmt;
 use std::marker::PhantomData;
@@ -49,13 +49,11 @@ impl<T, const LEN_BITS: usize> From<List<T, LEN_BITS>> for Vec<T> {
     }
 }
 
-struct ListVisitor<'de, T: Deserialize<'de>, const LEN: usize> {
-    element_type: PhantomData<&'de T>,
+struct ListVisitor<T, const LEN: usize> {
+    element_type: PhantomData<T>,
 }
 
-impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de>
-    for ListVisitor<'de, T, LEN_BITS>
-{
+impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de> for ListVisitor<T, LEN_BITS> {
     type Value = List<T, LEN_BITS>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -69,8 +67,6 @@ impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de>
     where
         A: SeqAccess<'de>,
     {
-        let mut val: List<T, LEN_BITS> = Default::default();
-
         let len = match LEN_BITS {
             8 => seq.next_element::<u8>()?.map(|len| len as usize),
             16 => seq.next_element::<u16>()?.map(|len| len as usize),
@@ -83,19 +79,13 @@ impl<'de, T: Deserialize<'de>, const LEN_BITS: usize> Visitor<'de>
             }
         };
 
-        if len.is_none() {
-            return Err(de::Error::custom(format!(
-                "List<T, {}> was not prefixed with length value",
-                LEN_BITS
-            )));
-        }
-
-        if let Some(elements) = seq.next_element::<Vec<T>>()? {
-            val.0 = elements;
-            Ok(val)
-        } else {
-            Err(de::Error::custom("Missing 1 or more elements from List"))
-        }
+        Ok(seq
+            .next_element_seed(ListElements {
+                len: len.ok_or(de::Error::invalid_length(0, &self))?,
+                inner: Default::default(),
+            })?
+            .ok_or(de::Error::invalid_length(1, &self))?
+            .into())
     }
 }
 
@@ -112,6 +102,50 @@ impl<'de, T: 'de + Deserialize<'de>, const LEN_BITS: usize> Deserialize<'de> for
                 element_type: PhantomData,
             },
         )
+    }
+}
+
+struct ListElements<T> {
+    len: usize,
+    inner: Vec<T>,
+}
+
+impl<'de, T> DeserializeSeed<'de> for ListElements<T>
+where
+    T: Deserialize<'de>,
+{
+    type Value = Vec<T>;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ListElementsVisitor<T>(ListElements<T>);
+
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for ListElementsVisitor<T> {
+            type Value = Vec<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_fmt(format_args!("a list of length {}", self.0.len))
+            }
+
+            fn visit_seq<A: SeqAccess<'de>>(mut self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let size = seq.size_hint().unwrap_or(self.0.len);
+
+                self.0.inner.reserve(size);
+                while let Some(element) = seq.next_element::<T>()? {
+                    self.0.inner.push(element);
+                }
+
+                if self.0.inner.len() != self.0.len {
+                    Err(de::Error::invalid_length(self.0.inner.len(), &self))
+                } else {
+                    Ok(self.0.inner)
+                }
+            }
+        }
+
+        deserializer.deserialize_tuple(self.len, ListElementsVisitor(self))
     }
 }
 
