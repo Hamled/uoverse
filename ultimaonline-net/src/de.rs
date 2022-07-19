@@ -396,12 +396,13 @@ where
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        unimplemented!();
+        // HACK: We only support enums for TermList elements
+        visitor.visit_enum(TerminatorEnum { deserializer: self })
     }
 
     fn deserialize_identifier<V>(self, _visitor: V) -> Result<V::Value>
@@ -420,5 +421,68 @@ where
 
     fn is_human_readable(&self) -> bool {
         false
+    }
+}
+
+struct TerminatorEnum<'de, 'a, R: io::BufRead> {
+    deserializer: &'a mut Deserializer<'de, R>,
+}
+
+impl<'de, 'a, R: io::BufRead> de::EnumAccess<'de> for TerminatorEnum<'de, 'a, R> {
+    type Error = Error;
+    type Variant = TerminatorVariant<'de, 'a, R>;
+
+    fn variant_seed<T>(self, seed: T) -> Result<(T::Value, Self::Variant)>
+    where
+        T: de::DeserializeSeed<'de>,
+    {
+        self.deserializer.peek = true;
+        let val = seed.deserialize(&mut *self.deserializer)?;
+        self.deserializer.peek = false;
+
+        Ok((
+            val,
+            TerminatorVariant {
+                deserializer: self.deserializer,
+                terminator_size: core::mem::size_of::<T::Value>(),
+            },
+        ))
+    }
+}
+
+struct TerminatorVariant<'de, 'a, R: io::BufRead> {
+    deserializer: &'a mut Deserializer<'de, R>,
+    terminator_size: usize,
+}
+
+impl<'de, 'a, R: io::BufRead> de::VariantAccess<'de> for TerminatorVariant<'de, 'a, R> {
+    type Error = Error;
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+    where
+        T: de::DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.deserializer)
+    }
+
+    fn unit_variant(self) -> Result<()> {
+        // This was a terminator variant, consume the bytes
+        self.deserializer.reader.consume(self.terminator_size);
+
+        Ok(())
+    }
+
+    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!();
+    }
+
+    fn struct_variant<V>(self, _fields: &'static [&'static str], _visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!();
     }
 }
