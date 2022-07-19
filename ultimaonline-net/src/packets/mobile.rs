@@ -47,7 +47,7 @@ pub struct State {
 #[packet(standard(id = 0x78, var_size = true))]
 pub struct Appearance {
     pub state: State,
-    pub items: ListTerm<Item, 32>,
+    pub items: ListTerm<Item, u32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize_repr, Deserialize_repr)]

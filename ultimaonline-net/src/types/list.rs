@@ -1,5 +1,7 @@
-use serde::de::{self, Deserialize, DeserializeSeed, Deserializer, SeqAccess, Visitor};
-use serde::ser::{self, Serialize, SerializeStruct, Serializer};
+use serde::de::{
+    self, Deserialize, DeserializeSeed, Deserializer, SeqAccess, VariantAccess, Visitor,
+};
+use serde::ser::{self, Serialize, SerializeSeq, SerializeStruct, Serializer};
 use std::{
     convert::{TryFrom, TryInto},
     fmt,
@@ -168,66 +170,82 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct ListTerm<T, const TERM_BITS: usize>(Vec<T>);
+pub trait ListTerminator: TryFrom<u64> + Into<u64> {
+    const BITS: u32;
+}
+impl ListTerminator for u8 {
+    const BITS: u32 = u8::BITS;
+}
+impl ListTerminator for u16 {
+    const BITS: u32 = u16::BITS;
+}
+impl ListTerminator for u32 {
+    const BITS: u32 = u32::BITS;
+}
+impl ListTerminator for u64 {
+    const BITS: u32 = u64::BITS;
+}
 
-impl<T: Serialize, const TERM_BITS: usize> Serialize for ListTerm<T, TERM_BITS> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListTerm<T, Term: ListTerminator>(Vec<T>, PhantomData<Term>);
+
+impl<T: Serialize, Term: ListTerminator + Serialize> Serialize for ListTerm<T, Term> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut struct_ser = serializer.serialize_struct("ListTerm", 2)?;
+        #[derive(Clone, Debug, PartialEq, serde::Serialize)]
+        enum Element<'a, T, Term: ListTerminator> {
+            Terminator(Term),
+            Value(&'a T),
+        }
 
-        struct_ser.serialize_field("elements", &self.0)?;
+        let mut seq_ser = serializer.serialize_seq(Some(self.0.len()))?;
+        for element in &self.0 {
+            seq_ser.serialize_element(&Element::<T, Term>::Value(element))?;
+        }
+        seq_ser.serialize_element(&Element::<T, Term>::Terminator(unsafe {
+            0u64.try_into().unwrap_unchecked()
+        }))?;
 
-        // Serialize a null terminator with a sized based on TERM_BITS
-        match TERM_BITS {
-            8 => struct_ser.serialize_field("terminator", &(0 as u8))?,
-            16 => struct_ser.serialize_field("terminator", &(0 as u16))?,
-            32 => struct_ser.serialize_field("terminator", &(0 as u32))?,
-            64 => struct_ser.serialize_field("terminator", &(0 as u64))?,
-            _ => {
-                return Err(ser::Error::custom(
-                    "ListTerm TERM_BITS must be one of: 8, 16, 32, 64",
-                ))
-            }
-        };
-
-        struct_ser.end()
+        seq_ser.end()
     }
 }
 
-impl<T, const TERM_BITS: usize> Default for ListTerm<T, TERM_BITS> {
+impl<T, Term: ListTerminator> Default for ListTerm<T, Term> {
     fn default() -> Self {
-        Self(Default::default())
+        Self(Default::default(), PhantomData)
     }
 }
 
-impl<T, const TERM_BITS: usize> From<Vec<T>> for ListTerm<T, TERM_BITS> {
+impl<T, Term: ListTerminator> From<Vec<T>> for ListTerm<T, Term> {
     fn from(val: Vec<T>) -> Self {
-        Self(val)
+        Self(val, PhantomData)
     }
 }
 
-impl<T, const TERM_BITS: usize> From<ListTerm<T, TERM_BITS>> for Vec<T> {
-    fn from(val: ListTerm<T, TERM_BITS>) -> Self {
+impl<T, Term: ListTerminator> From<ListTerm<T, Term>> for Vec<T> {
+    fn from(val: ListTerm<T, Term>) -> Self {
         val.0
     }
 }
 
-struct ListTermVisitor<'de, T: Deserialize<'de>, const TERM_BITS: usize> {
-    element_type: PhantomData<&'de T>,
+struct ListTermVisitor<T, Term> {
+    element_type: PhantomData<T>,
+    terminator_type: PhantomData<Term>,
 }
 
-impl<'de, T: Deserialize<'de>, const TERM_BITS: usize> Visitor<'de>
-    for ListTermVisitor<'de, T, TERM_BITS>
+impl<'de, T, Term> Visitor<'de> for ListTermVisitor<T, Term>
+where
+    T: Deserialize<'de>,
+    Term: ListTerminator + Deserialize<'de>,
 {
-    type Value = ListTerm<T, TERM_BITS>;
+    type Value = ListTerm<T, Term>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
             "a list terminated by a {}-bit null value",
-            TERM_BITS
+            Term::BITS
         ))
     }
 
@@ -235,40 +253,22 @@ impl<'de, T: Deserialize<'de>, const TERM_BITS: usize> Visitor<'de>
     where
         A: SeqAccess<'de>,
     {
-        let mut val: ListTerm<T, TERM_BITS> = Default::default();
-        loop {
-            let term = match TERM_BITS {
-                8 => seq.next_element::<u8>()?.and_then(|t| Some(t as usize)),
-                16 => seq.next_element::<u16>()?.and_then(|t| Some(t as usize)),
-                32 => seq.next_element::<u32>()?.and_then(|t| Some(t as usize)),
-                64 => seq.next_element::<u64>()?.and_then(|t| Some(t as usize)),
-                _ => {
-                    return Err(de::Error::custom(
-                        "ListTerm TERM_BITS must be one of: 8, 16, 32, 64",
-                    ))
-                }
-            };
-
-            match term {
-                Some(0) => break,
-                _ => {
-                    if let Some(e) = seq.next_element::<T>()? {
-                        val.0.push(e);
-                    } else {
-                        return Err(de::Error::custom(
-                            "Unable to deserialize element from ListTerm",
-                        ));
-                    }
-                }
+        let mut elements = Vec::<T>::new();
+        while let Some(element) = seq.next_element::<ListTermElement<T, Term>>()? {
+            match element {
+                ListTermElement::Value(val) => elements.push(val),
+                ListTermElement::Terminator(_) => break,
             }
         }
 
-        Ok(val)
+        Ok(elements.into())
     }
 }
 
-impl<'de, T: 'de + Deserialize<'de>, const TERM_BITS: usize> Deserialize<'de>
-    for ListTerm<T, TERM_BITS>
+impl<'de, T, Term> Deserialize<'de> for ListTerm<T, Term>
+where
+    T: 'de + Deserialize<'de>,
+    Term: 'de + ListTerminator + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -276,6 +276,75 @@ impl<'de, T: 'de + Deserialize<'de>, const TERM_BITS: usize> Deserialize<'de>
     {
         deserializer.deserialize_seq(ListTermVisitor {
             element_type: PhantomData,
+            terminator_type: PhantomData,
         })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum ListTermElement<T, Term: ListTerminator> {
+    Terminator(PhantomData<Term>),
+    Value(T),
+}
+
+impl<'de, T, Term> Deserialize<'de> for ListTermElement<T, Term>
+where
+    T: Deserialize<'de>,
+    Term: ListTerminator + Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        const VARIANTS: &'static [&'static str] = &["Terminator", "Value"];
+        deserializer.deserialize_enum("ListTermElement", VARIANTS, ListTermElementVisitor::new())
+    }
+}
+
+struct ListTermElementVisitor<T, Term: ListTerminator> {
+    element_type: PhantomData<T>,
+    terminator_type: PhantomData<Term>,
+}
+
+impl<T, Term: ListTerminator> ListTermElementVisitor<T, Term> {
+    fn new() -> Self {
+        Self {
+            element_type: PhantomData,
+            terminator_type: PhantomData,
+        }
+    }
+}
+
+impl<'de, T, Term> Visitor<'de> for ListTermElementVisitor<T, Term>
+where
+    T: Deserialize<'de>,
+    Term: ListTerminator + Deserialize<'de>,
+{
+    type Value = ListTermElement<T, Term>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_fmt(format_args!(
+            "an untagged enum variant, either Value({}) or Terminator(0{})",
+            std::any::type_name::<T>(),
+            std::any::type_name::<Term>()
+        ))
+    }
+
+    fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+    where
+        A: de::EnumAccess<'de>,
+    {
+        // Figure out if this is a terminator
+        let (val, variant) = data.variant::<Term>()?;
+
+        match val.into() {
+            0u64 => {
+                <A::Variant as VariantAccess>::unit_variant(variant)?;
+                Ok(ListTermElement::Terminator(PhantomData))
+            }
+            _ => Ok(ListTermElement::Value(
+                <A::Variant as VariantAccess>::newtype_variant(variant)?,
+            )),
+        }
     }
 }
