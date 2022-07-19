@@ -4,13 +4,14 @@ use serde::{
     de::{self, Visitor},
     Deserialize,
 };
-use std::{io, str};
+use std::{convert::TryInto, io, str};
 
 pub struct Deserializer<'a, R>
 where
     R: io::BufRead,
 {
     reader: &'a mut R,
+    peek: bool,
 }
 
 pub fn from_reader<'a, R, T>(reader: &'a mut R) -> Result<T>
@@ -18,7 +19,10 @@ where
     R: io::BufRead,
     T: Deserialize<'a>,
 {
-    let mut deserializer = Deserializer { reader };
+    let mut deserializer = Deserializer {
+        reader,
+        peek: false,
+    };
     let t = T::deserialize(&mut deserializer)?;
     Ok(t)
 }
@@ -27,7 +31,22 @@ macro_rules! impl_read_literal {
     ($name:ident : $ty:ty = $read_func:ident()) => {
         #[inline]
         fn $name(&mut self) -> Result<$ty> {
-            self.reader.$read_func::<BigEndian>().map_err(Error::io)
+            if self.peek {
+                let buf = self.reader.fill_buf()?;
+                if buf.len() < ::core::mem::size_of::<$ty>() {
+                    Err(Self::insufficient_buffer::<$ty>())
+                } else {
+                    Ok(unsafe {
+                        <$ty>::from_be_bytes(
+                            buf[..::core::mem::size_of::<$ty>()]
+                                .try_into()
+                                .unwrap_unchecked(),
+                        )
+                    })
+                }
+            } else {
+                Ok(self.reader.$read_func::<BigEndian>().map_err(Error::io)?)
+            }
         }
     };
 }
@@ -44,6 +63,13 @@ where
     impl_read_literal!(read_i64: i64 = read_i64());
     impl_read_literal!(read_f32: f32 = read_f32());
     impl_read_literal!(read_f64: f64 = read_f64());
+
+    fn insufficient_buffer<T>() -> Error {
+        Error::io(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            format!("insufficient buffer for {}", std::any::type_name::<T>()),
+        ))
+    }
 }
 
 // TODO: Make the deserialization process perform less copying
@@ -58,26 +84,51 @@ where
     where
         V: Visitor<'de>,
     {
-        let mut buf = [0u8; 1];
-        self.reader.read(&mut buf).map_err(Error::io)?;
+        let val = if self.peek {
+            let buf = self.reader.fill_buf()?;
+            if buf.is_empty() {
+                return Err(Deserializer::<'de, R>::insufficient_buffer::<bool>());
+            }
+            buf[0]
+        } else {
+            self.reader.read_u8().map_err(Error::io)?
+        };
 
-        let res = if buf[0] == 0 { false } else { true };
-
-        visitor.visit_bool(res)
+        visitor.visit_bool(if val == 0 { false } else { true })
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_u8(self.reader.read_u8().map_err(Error::io)?)
+        let val = if self.peek {
+            let buf = self.reader.fill_buf()?;
+            if buf.is_empty() {
+                return Err(Deserializer::<'de, R>::insufficient_buffer::<u8>());
+            }
+            buf[0]
+        } else {
+            self.reader.read_u8().map_err(Error::io)?
+        };
+
+        visitor.visit_u8(val)
     }
 
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_i8(self.reader.read_i8().map_err(Error::io)?)
+        let val = if self.peek {
+            let buf = self.reader.fill_buf()?;
+            if buf.is_empty() {
+                return Err(Deserializer::<'de, R>::insufficient_buffer::<i8>());
+            }
+            buf[0] as i8
+        } else {
+            self.reader.read_i8().map_err(Error::io)?
+        };
+
+        visitor.visit_i8(val)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
@@ -154,6 +205,10 @@ where
     where
         V: Visitor<'de>,
     {
+        if self.peek {
+            unimplemented!();
+        }
+
         // TODO: Make a zero-copy version of this if possible
         let mut buffer = vec![];
         loop {
@@ -177,6 +232,10 @@ where
     where
         V: Visitor<'de>,
     {
+        if self.peek {
+            unimplemented!();
+        }
+
         let mut buffer = vec![];
         loop {
             let byte = self.reader.read_u8().map_err(Error::io)?;
