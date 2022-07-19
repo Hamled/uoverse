@@ -169,10 +169,9 @@ where
 
             if let Some(writer) = &mut self.writer {
                 writer.write_all(v.as_bytes()).map_err(Error::io)?;
-                self.end_null()
-            } else {
-                Ok(())
             }
+
+            self.end_null()
         } else {
             Err(Error::data("Unsupported string encoding"))
         }
