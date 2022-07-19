@@ -1,18 +1,21 @@
 use crate::error::{Error, Result};
 use byteorder::{BigEndian, ReadBytesExt};
-use serde::{de, de::Visitor, Deserialize};
+use serde::{
+    de::{self, Visitor},
+    Deserialize,
+};
 use std::{io, str};
 
 pub struct Deserializer<'a, R>
 where
-    R: io::Read,
+    R: io::BufRead,
 {
     reader: &'a mut R,
 }
 
 pub fn from_reader<'a, R, T>(reader: &'a mut R) -> Result<T>
 where
-    R: io::Read,
+    R: io::BufRead,
     T: Deserialize<'a>,
 {
     let mut deserializer = Deserializer { reader };
@@ -31,7 +34,7 @@ macro_rules! impl_read_literal {
 
 impl<R> Deserializer<'_, R>
 where
-    R: io::Read,
+    R: io::BufRead,
 {
     impl_read_literal!(read_u16: u16 = read_u16());
     impl_read_literal!(read_i16: i16 = read_i16());
@@ -47,7 +50,7 @@ where
 
 impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
 where
-    R: io::Read,
+    R: io::BufRead,
 {
     type Error = Error;
 
@@ -197,12 +200,12 @@ where
         V: Visitor<'de>,
     {
         // Adapted from serde_bincode
-        struct Access<'de, 'a, R: io::Read> {
+        struct Access<'de, 'a, R: io::BufRead> {
             deserializer: &'a mut Deserializer<'de, R>,
             len: usize,
         }
 
-        impl<'de, 'a, R: io::Read> de::SeqAccess<'de> for Access<'de, 'a, R> {
+        impl<'de, 'a, R: io::BufRead> de::SeqAccess<'de> for Access<'de, 'a, R> {
             type Error = Error;
 
             fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>

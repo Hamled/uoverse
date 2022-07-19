@@ -162,7 +162,7 @@ fn content_from_packet(name: &syn::Ident, args: &PacketArgs) -> proc_macro2::Tok
 
     quote! {
         impl crate::packets::FromPacketData for #name {
-            fn from_packet_data<R: ::std::io::Read>(reader: &mut R) -> crate::error::Result<Self> {
+            fn from_packet_data<R: ::std::io::BufRead>(reader: &mut R) -> crate::error::Result<Self> {
                 use ::byteorder::{ReadBytesExt, BigEndian};
                 use crate::error::Error;
 
