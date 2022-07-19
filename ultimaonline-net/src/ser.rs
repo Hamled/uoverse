@@ -220,6 +220,19 @@ where
         Ok(())
     }
 
+    fn serialize_newtype_variant<T>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        val: &T,
+    ) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        val.serialize(self)
+    }
+
     // Lots of stuff unimplemented as it's not needed
 
     fn serialize_unit(self) -> Result<()> {
@@ -231,19 +244,6 @@ where
     }
 
     fn serialize_newtype_struct<T>(self, _: &'static str, _: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
-        unimplemented!()
-    }
-
-    fn serialize_newtype_variant<T>(
-        self,
-        _: &'static str,
-        _: u32,
-        _: &'static str,
-        _: &T,
-    ) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
