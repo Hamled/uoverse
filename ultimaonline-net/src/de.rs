@@ -258,7 +258,6 @@ where
     where
         V: Visitor<'de>,
     {
-        // Adapted from serde_bincode
         struct Access<'de, 'a, R: io::BufRead> {
             deserializer: &'a mut Deserializer<'de, R>,
             len: usize,
@@ -307,8 +306,27 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = self.read_u16()?;
-        self.deserialize_tuple(len as usize, visitor)
+        struct Access<'de, 'a, R: io::BufRead> {
+            deserializer: &'a mut Deserializer<'de, R>,
+        }
+
+        impl<'de, 'a, R: io::BufRead> de::SeqAccess<'de> for Access<'de, 'a, R> {
+            type Error = Error;
+
+            fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+            where
+                T: de::DeserializeSeed<'de>,
+            {
+                let value = de::DeserializeSeed::deserialize(seed, &mut *self.deserializer)?;
+                Ok(Some(value))
+            }
+
+            fn size_hint(&self) -> Option<usize> {
+                None
+            }
+        }
+
+        visitor.visit_seq(Access { deserializer: self })
     }
 
     // Unimplemented parts of the Serde data model
