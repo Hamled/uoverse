@@ -3,14 +3,12 @@ use macros::packet;
 use crate::types::FixedStr;
 
 #[packet(extended(id = 0x05))]
-#[derive(Debug, PartialEq)]
 pub struct WindowSize {
     pub width: u32,
     pub height: u32,
 }
 
 #[packet(extended(id = 0x0B))]
-#[derive(Debug, PartialEq)]
 pub struct Language {
     pub lang: FixedStr<4>,
 }
@@ -24,7 +22,7 @@ pub struct Flags {
     pub flags: u32,     // Always 0xFFFFFFFF
 }
 
-#[packet(standard(id = 0xC8))]
+#[packet(fixed(id = 0xC8, size = 1))]
 pub struct ViewRange {
     pub range: u8,
 }

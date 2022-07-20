@@ -169,10 +169,9 @@ where
 
             if let Some(writer) = &mut self.writer {
                 writer.write_all(v.as_bytes()).map_err(Error::io)?;
-                self.end_null()
-            } else {
-                Ok(())
             }
+
+            self.end_null()
         } else {
             Err(Error::data("Unsupported string encoding"))
         }
@@ -220,33 +219,33 @@ where
         Ok(())
     }
 
-    // Lots of stuff unimplemented as it's not needed
-
-    fn serialize_unit(self) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn serialize_unit_variant(self, _: &'static str, _: u32, _: &'static str) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn serialize_newtype_struct<T>(self, _: &'static str, _: &T) -> Result<()>
+    fn serialize_newtype_struct<T>(self, _name: &'static str, val: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        unimplemented!()
+        val.serialize(self)
+    }
+
+    fn serialize_unit(self) -> Result<()> {
+        Ok(())
     }
 
     fn serialize_newtype_variant<T>(
         self,
-        _: &'static str,
-        _: u32,
-        _: &'static str,
-        _: &T,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        val: &T,
     ) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
+        val.serialize(self)
+    }
+
+    // Unimplemented parts of the serde data model
+
+    fn serialize_unit_variant(self, _: &'static str, _: u32, _: &'static str) -> Result<()> {
         unimplemented!()
     }
 

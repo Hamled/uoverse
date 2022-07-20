@@ -1,37 +1,71 @@
 use crate::error::{Error, Result};
 use byteorder::{BigEndian, ReadBytesExt};
-use serde::{de, de::Visitor, Deserialize};
-use std::{io, str};
+use serde::{
+    de::{self, Visitor},
+    Deserialize,
+};
+use std::{convert::TryInto, io, str};
 
 pub struct Deserializer<'a, R>
 where
-    R: io::Read,
+    R: io::BufRead,
 {
     reader: &'a mut R,
+    peek: bool,
+    remaining: usize,
 }
 
-pub fn from_reader<'a, R, T>(reader: &'a mut R) -> Result<T>
+pub fn from_reader<'a, R, T>(reader: &'a mut R, size: usize) -> Result<T>
 where
-    R: io::Read,
+    R: io::BufRead,
     T: Deserialize<'a>,
 {
-    let mut deserializer = Deserializer { reader };
+    let mut deserializer = Deserializer {
+        reader,
+        peek: false,
+        remaining: size,
+    };
+
     let t = T::deserialize(&mut deserializer)?;
-    Ok(t)
+
+    match deserializer.remaining {
+        0 => Ok(t),
+        _ => Err(Error::data(
+            "Deserializer had data remaining after deserializing value",
+        )),
+    }
 }
 
 macro_rules! impl_read_literal {
     ($name:ident : $ty:ty = $read_func:ident()) => {
         #[inline]
         fn $name(&mut self) -> Result<$ty> {
-            self.reader.$read_func::<BigEndian>().map_err(Error::io)
+            if self.peek {
+                let buf = self.reader.fill_buf()?;
+                if buf.len() < ::core::mem::size_of::<$ty>() {
+                    Err(Self::insufficient_buffer::<$ty>())
+                } else {
+                    Ok(unsafe {
+                        <$ty>::from_be_bytes(
+                            buf[..::core::mem::size_of::<$ty>()]
+                                .try_into()
+                                .unwrap_unchecked(),
+                        )
+                    })
+                }
+            } else {
+                let val = self.reader.$read_func::<BigEndian>().map_err(Error::io)?;
+                self.track_read(::core::mem::size_of::<$ty>())?;
+
+                Ok(val)
+            }
         }
     };
 }
 
 impl<R> Deserializer<'_, R>
 where
-    R: io::Read,
+    R: io::BufRead,
 {
     impl_read_literal!(read_u16: u16 = read_u16());
     impl_read_literal!(read_i16: i16 = read_i16());
@@ -41,13 +75,27 @@ where
     impl_read_literal!(read_i64: i64 = read_i64());
     impl_read_literal!(read_f32: f32 = read_f32());
     impl_read_literal!(read_f64: f64 = read_f64());
+
+    fn insufficient_buffer<T>() -> Error {
+        Error::io(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            format!("insufficient buffer for {}", std::any::type_name::<T>()),
+        ))
+    }
+
+    fn track_read(&mut self, amount: usize) -> Result<()> {
+        self.remaining = self.remaining.checked_sub(amount).ok_or(Error::data(
+            "Deserializer read past end of serialized value",
+        ))?;
+        Ok(())
+    }
 }
 
 // TODO: Make the deserialization process perform less copying
 
 impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
 where
-    R: io::Read,
+    R: io::BufRead,
 {
     type Error = Error;
 
@@ -55,26 +103,57 @@ where
     where
         V: Visitor<'de>,
     {
-        let mut buf = [0u8; 1];
-        self.reader.read(&mut buf).map_err(Error::io)?;
+        let val = if self.peek {
+            let buf = self.reader.fill_buf()?;
+            if buf.is_empty() {
+                return Err(Deserializer::<'de, R>::insufficient_buffer::<bool>());
+            }
+            buf[0]
+        } else {
+            let val = self.reader.read_u8().map_err(Error::io)?;
+            self.track_read(core::mem::size_of::<bool>())?;
+            val
+        };
 
-        let res = if buf[0] == 0 { false } else { true };
-
-        visitor.visit_bool(res)
+        visitor.visit_bool(if val == 0 { false } else { true })
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_u8(self.reader.read_u8().map_err(Error::io)?)
+        let val = if self.peek {
+            let buf = self.reader.fill_buf()?;
+            if buf.is_empty() {
+                return Err(Deserializer::<'de, R>::insufficient_buffer::<u8>());
+            }
+            buf[0]
+        } else {
+            let val = self.reader.read_u8().map_err(Error::io)?;
+            self.track_read(core::mem::size_of::<u8>())?;
+            val
+        };
+
+        visitor.visit_u8(val)
     }
 
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_i8(self.reader.read_i8().map_err(Error::io)?)
+        let val = if self.peek {
+            let buf = self.reader.fill_buf()?;
+            if buf.is_empty() {
+                return Err(Deserializer::<'de, R>::insufficient_buffer::<i8>());
+            }
+            buf[0] as i8
+        } else {
+            let val = self.reader.read_i8().map_err(Error::io)?;
+            self.track_read(core::mem::size_of::<i8>())?;
+            val
+        };
+
+        visitor.visit_i8(val)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
@@ -151,6 +230,10 @@ where
     where
         V: Visitor<'de>,
     {
+        if self.peek {
+            unimplemented!();
+        }
+
         // TODO: Make a zero-copy version of this if possible
         let mut buffer = vec![];
         loop {
@@ -160,6 +243,8 @@ where
                 n => buffer.push(n),
             }
         }
+
+        self.track_read(buffer.len() + 1)?;
 
         let s = str::from_utf8(&buffer).map_err(|_| Error::data("Could not parse string"))?;
         // We don't support UTF-8
@@ -174,6 +259,10 @@ where
     where
         V: Visitor<'de>,
     {
+        if self.peek {
+            unimplemented!();
+        }
+
         let mut buffer = vec![];
         loop {
             let byte = self.reader.read_u8().map_err(Error::io)?;
@@ -182,6 +271,8 @@ where
                 n => buffer.push(n),
             }
         }
+
+        self.track_read(buffer.len() + 1)?;
 
         let s = String::from_utf8(buffer).map_err(|_| Error::data("Could not parse string"))?;
         // We don't support UTF-8
@@ -196,13 +287,12 @@ where
     where
         V: Visitor<'de>,
     {
-        // Adapted from serde_bincode
-        struct Access<'de, 'a, R: io::Read> {
+        struct Access<'de, 'a, R: io::BufRead> {
             deserializer: &'a mut Deserializer<'de, R>,
             len: usize,
         }
 
-        impl<'de, 'a, R: io::Read> de::SeqAccess<'de> for Access<'de, 'a, R> {
+        impl<'de, 'a, R: io::BufRead> de::SeqAccess<'de> for Access<'de, 'a, R> {
             type Error = Error;
 
             fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
@@ -245,8 +335,66 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = self.read_u16()?;
-        self.deserialize_tuple(len as usize, visitor)
+        struct Access<'de, 'a, R: io::BufRead> {
+            deserializer: &'a mut Deserializer<'de, R>,
+        }
+
+        impl<'de, 'a, R: io::BufRead> de::SeqAccess<'de> for Access<'de, 'a, R> {
+            type Error = Error;
+
+            fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+            where
+                T: de::DeserializeSeed<'de>,
+            {
+                match self.deserializer.remaining {
+                    0 => Ok(None),
+                    _ => Ok(Some(de::DeserializeSeed::deserialize(
+                        seed,
+                        &mut *self.deserializer,
+                    )?)),
+                }
+            }
+
+            fn size_hint(&self) -> Option<usize> {
+                None
+            }
+        }
+
+        visitor.visit_seq(Access { deserializer: self })
+    }
+
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+
+    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        // HACK: We only support enums for TermList elements
+        visitor.visit_enum(TerminatorEnum { deserializer: self })
     }
 
     // Unimplemented parts of the Serde data model
@@ -272,27 +420,6 @@ where
         unimplemented!();
     }
 
-    fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_unit_struct<V>(self, _name: &'static str, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
     fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
@@ -306,18 +433,6 @@ where
     }
 
     fn deserialize_map<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        unimplemented!();
-    }
-
-    fn deserialize_enum<V>(
-        self,
-        _name: &'static str,
-        _variants: &'static [&'static str],
-        _visitor: V,
-    ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
@@ -340,5 +455,69 @@ where
 
     fn is_human_readable(&self) -> bool {
         false
+    }
+}
+
+struct TerminatorEnum<'de, 'a, R: io::BufRead> {
+    deserializer: &'a mut Deserializer<'de, R>,
+}
+
+impl<'de, 'a, R: io::BufRead> de::EnumAccess<'de> for TerminatorEnum<'de, 'a, R> {
+    type Error = Error;
+    type Variant = TerminatorVariant<'de, 'a, R>;
+
+    fn variant_seed<T>(self, seed: T) -> Result<(T::Value, Self::Variant)>
+    where
+        T: de::DeserializeSeed<'de>,
+    {
+        self.deserializer.peek = true;
+        let val = seed.deserialize(&mut *self.deserializer)?;
+        self.deserializer.peek = false;
+
+        Ok((
+            val,
+            TerminatorVariant {
+                deserializer: self.deserializer,
+                terminator_size: core::mem::size_of::<T::Value>(),
+            },
+        ))
+    }
+}
+
+struct TerminatorVariant<'de, 'a, R: io::BufRead> {
+    deserializer: &'a mut Deserializer<'de, R>,
+    terminator_size: usize,
+}
+
+impl<'de, 'a, R: io::BufRead> de::VariantAccess<'de> for TerminatorVariant<'de, 'a, R> {
+    type Error = Error;
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+    where
+        T: de::DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.deserializer)
+    }
+
+    fn unit_variant(self) -> Result<()> {
+        // This was a terminator variant, consume the bytes
+        self.deserializer.reader.consume(self.terminator_size);
+        self.deserializer.track_read(self.terminator_size)?;
+
+        Ok(())
+    }
+
+    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!();
+    }
+
+    fn struct_variant<V>(self, _fields: &'static [&'static str], _visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        unimplemented!();
     }
 }

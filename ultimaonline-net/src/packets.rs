@@ -1,6 +1,6 @@
 use crate::error::Result;
 use serde::Serialize;
-use std::io::{Read, Write};
+use std::io::{BufRead, Write};
 
 pub mod action;
 pub mod char_login;
@@ -35,7 +35,7 @@ pub trait FromPacketData
 where
     Self: Sized,
 {
-    fn from_packet_data<R: Read>(reader: &mut R) -> Result<Self>;
+    fn from_packet_data<R: BufRead>(reader: &mut R) -> Result<Self>;
 }
 
 pub fn write_packet<T, W: Write>(content: T, dst: &mut W) -> Result<()>
