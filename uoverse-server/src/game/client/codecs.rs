@@ -69,6 +69,7 @@ define_codec! {
         client_info::WindowSize,
         client_info::ViewRange,
         entity::EntityBatchQuery,
+        gump::CloseStatus,
         housing::ShowPublicContent,
         mobile::Query,
         movement::Request,
