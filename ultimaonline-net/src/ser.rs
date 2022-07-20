@@ -235,7 +235,7 @@ where
     // Lots of stuff unimplemented as it's not needed
 
     fn serialize_unit(self) -> Result<()> {
-        unimplemented!()
+        Ok(())
     }
 
     fn serialize_unit_variant(self, _: &'static str, _: u32, _: &'static str) -> Result<()> {
