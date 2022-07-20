@@ -67,6 +67,16 @@ impl Server {
                     .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?;
 
                 let mut closed_clients: Vec<usize> = vec![];
+                // Receive client packets
+                for (i, client) in clients.iter_mut().enumerate() {
+                    loop {
+                        match client.recv()? {
+                            None => break,
+                            _ => {} // Skip everything
+                        }
+                    }
+                }
+
                 for (i, client) in clients.iter_mut().enumerate() {
                     if client.sender.is_closed() {
                         closed_clients.push(i);
