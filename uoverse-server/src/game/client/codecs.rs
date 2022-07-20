@@ -68,6 +68,7 @@ define_codec! {
         client_info::Language,
         client_info::WindowSize,
         client_info::ViewRange,
+        entity::EntityBatchQuery,
         housing::ShowPublicContent,
         mobile::Query,
         movement::Request,

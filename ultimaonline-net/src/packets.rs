@@ -7,6 +7,7 @@ pub mod char_login;
 pub mod char_select;
 pub mod chat;
 pub mod client_info;
+pub mod entity;
 pub mod housing;
 pub mod login;
 pub mod mobile;
