@@ -400,11 +400,11 @@ where
         unimplemented!();
     }
 
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<V::Value>
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        unimplemented!();
+        visitor.visit_newtype_struct(self)
     }
 
     fn deserialize_tuple_struct<V>(

@@ -242,11 +242,11 @@ where
         unimplemented!()
     }
 
-    fn serialize_newtype_struct<T>(self, _: &'static str, _: &T) -> Result<()>
+    fn serialize_newtype_struct<T>(self, _name: &'static str, val: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        unimplemented!()
+        val.serialize(self)
     }
 
     fn serialize_tuple_variant(
