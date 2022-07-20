@@ -8,8 +8,11 @@ use std::{
 use tokio::sync::mpsc;
 use ultimaonline_net::{
     error::{Error, Result},
+    packets::movement,
     types::{Direction, Serial},
 };
+
+use crate::game::client;
 
 use super::client::{Client, ClientReceiver, ClientSender, WorldClient};
 
@@ -46,6 +49,7 @@ impl Server {
             frame += 1;
             println!("Frame: {}", frame);
             {
+                // Update world state
                 let mut world = self
                     .world
                     .lock()
@@ -81,6 +85,16 @@ impl Server {
                     loop {
                         match client.recv()? {
                             None => break,
+                            Some(client::codecs::InWorldFrameRecv::Request(req)) => {
+                                // Always succeed for now
+                                client.send(
+                                    movement::Success {
+                                        sequence: req.sequence,
+                                        notoriety: types::Notoriety::Ally,
+                                    }
+                                    .into(),
+                                )?;
+                            }
                             _ => {} // Skip everything
                         }
                     }
