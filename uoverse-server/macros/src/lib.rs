@@ -109,14 +109,16 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     use #frame_name::*;
 
                     // Peek at the first byte
-                    if src.len() < 1 { return Ok(None); }
-                    let packet_id = src[0];
+                    if !src.has_remaining() { return Ok(None); }
+
+                    let chunk = src.chunk();
+                    let packet_id = chunk[0];
 
                     // Peek for extended packet id
                     let extended_id = match packet_id {
                         packets::EXTENDED_PACKET_ID => {
-                            if src.len() < 5 { return Ok(None); }
-                            Some(u16::from_be_bytes(src[3..5].try_into().unwrap()))
+                            if chunk.len() < 5 { return Ok(None); }
+                            Some(u16::from_be_bytes(chunk[3..5].try_into().unwrap()))
                         },
                         _ => None
                     };
