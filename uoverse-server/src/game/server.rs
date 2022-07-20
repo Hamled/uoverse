@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 use tokio::sync::mpsc;
 use ultimaonline_net::{
@@ -66,9 +69,15 @@ impl Server {
                     .lock()
                     .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?;
 
-                let mut closed_clients: Vec<usize> = vec![];
+                let mut closed_clients = HashSet::<usize>::new();
+
                 // Receive client packets
                 for (i, client) in clients.iter_mut().enumerate() {
+                    if client.sender.is_closed() {
+                        closed_clients.insert(i);
+                        continue;
+                    }
+
                     loop {
                         match client.recv()? {
                             None => break,
@@ -79,7 +88,7 @@ impl Server {
 
                 for (i, client) in clients.iter_mut().enumerate() {
                     if client.sender.is_closed() {
-                        closed_clients.push(i);
+                        closed_clients.insert(i);
                         continue;
                     }
 
@@ -99,10 +108,11 @@ impl Server {
                     )?;
                 }
 
+                let mut closed_clients: Vec<&usize> = closed_clients.iter().collect();
                 closed_clients.sort();
                 closed_clients.reverse();
                 for i in closed_clients {
-                    clients.remove(i);
+                    clients.remove(*i);
                 }
             }
 
