@@ -22,7 +22,7 @@ pub struct Flags {
     pub flags: u32,     // Always 0xFFFFFFFF
 }
 
-#[packet(standard(id = 0xC8))]
+#[packet(fixed(id = 0xC8, size = 1))]
 pub struct ViewRange {
     pub range: u8,
 }

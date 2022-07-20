@@ -1,6 +1,6 @@
 use macros::packet;
 
-#[packet(standard(id = 0xFB))]
+#[packet(fixed(id = 0xFB, size = 1))]
 pub struct ShowPublicContent {
     show: bool,
 }
