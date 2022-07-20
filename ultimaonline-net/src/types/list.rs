@@ -348,3 +348,24 @@ where
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ListNonTerm<T: Serialize>(Vec<T>);
+
+impl<T: Serialize> Default for ListNonTerm<T> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<T: Serialize> From<Vec<T>> for ListNonTerm<T> {
+    fn from(val: Vec<T>) -> Self {
+        Self(val)
+    }
+}
+
+impl<T: Serialize> From<ListNonTerm<T>> for Vec<T> {
+    fn from(val: ListNonTerm<T>) -> Self {
+        val.0
+    }
+}
