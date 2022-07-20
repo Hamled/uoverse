@@ -363,6 +363,40 @@ where
         visitor.visit_seq(Access { deserializer: self })
     }
 
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+
+    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        // HACK: We only support enums for TermList elements
+        visitor.visit_enum(TerminatorEnum { deserializer: self })
+    }
+
     // Unimplemented parts of the Serde data model
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
@@ -386,27 +420,6 @@ where
         unimplemented!();
     }
 
-    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_unit()
-    }
-
-    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_unit()
-    }
-
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_newtype_struct(self)
-    }
-
     fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
@@ -424,19 +437,6 @@ where
         V: Visitor<'de>,
     {
         unimplemented!();
-    }
-
-    fn deserialize_enum<V>(
-        self,
-        _name: &'static str,
-        _variants: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        // HACK: We only support enums for TermList elements
-        visitor.visit_enum(TerminatorEnum { deserializer: self })
     }
 
     fn deserialize_identifier<V>(self, _visitor: V) -> Result<V::Value>

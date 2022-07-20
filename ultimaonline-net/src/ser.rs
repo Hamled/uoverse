@@ -219,6 +219,17 @@ where
         Ok(())
     }
 
+    fn serialize_newtype_struct<T>(self, _name: &'static str, val: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        val.serialize(self)
+    }
+
+    fn serialize_unit(self) -> Result<()> {
+        Ok(())
+    }
+
     fn serialize_newtype_variant<T>(
         self,
         _name: &'static str,
@@ -232,21 +243,10 @@ where
         val.serialize(self)
     }
 
-    // Lots of stuff unimplemented as it's not needed
-
-    fn serialize_unit(self) -> Result<()> {
-        Ok(())
-    }
+    // Unimplemented parts of the serde data model
 
     fn serialize_unit_variant(self, _: &'static str, _: u32, _: &'static str) -> Result<()> {
         unimplemented!()
-    }
-
-    fn serialize_newtype_struct<T>(self, _name: &'static str, val: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
-        val.serialize(self)
     }
 
     fn serialize_tuple_variant(
