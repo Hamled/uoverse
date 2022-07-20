@@ -135,11 +135,10 @@ fn content_from_packet(name: &syn::Ident, args: &PacketArgs) -> proc_macro2::Tok
 
     let size_check = match args {
         Fixed { .. } => quote! {
-            let _size = #name::SIZE.unwrap();
+            let size = #name::SIZE.unwrap();
         },
         _ => quote! {
-            // TODO: Actually check this length value
-            let _size = reader.read_u16::<BigEndian>().map_err(Error::io)? as usize
+            let size = reader.read_u16::<BigEndian>().map_err(Error::io)? as usize
                 - 1  // Packet ID
                 - 2; // Size field
         },
@@ -153,7 +152,7 @@ fn content_from_packet(name: &syn::Ident, args: &PacketArgs) -> proc_macro2::Tok
                 return Err(Error::data(format!("Packet extended ID {:#0X} did not match expected {:#0X}", extended_id, #id)));
             }
 
-            let _size = _size - 2; // Extended ID
+            let size = size - 2; // Extended ID
         },
         _ => quote! {},
     };
@@ -179,7 +178,7 @@ fn content_from_packet(name: &syn::Ident, args: &PacketArgs) -> proc_macro2::Tok
 
                 #read_extended_id
 
-                crate::de::from_reader(reader)
+                crate::de::from_reader(reader, size)
             }
         }
     }

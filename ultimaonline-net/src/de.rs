@@ -12,9 +12,10 @@ where
 {
     reader: &'a mut R,
     peek: bool,
+    remaining: usize,
 }
 
-pub fn from_reader<'a, R, T>(reader: &'a mut R) -> Result<T>
+pub fn from_reader<'a, R, T>(reader: &'a mut R, size: usize) -> Result<T>
 where
     R: io::BufRead,
     T: Deserialize<'a>,
@@ -22,9 +23,17 @@ where
     let mut deserializer = Deserializer {
         reader,
         peek: false,
+        remaining: size,
     };
+
     let t = T::deserialize(&mut deserializer)?;
-    Ok(t)
+
+    match deserializer.remaining {
+        0 => Ok(t),
+        _ => Err(Error::data(
+            "Deserializer had data remaining after deserializing value",
+        )),
+    }
 }
 
 macro_rules! impl_read_literal {
@@ -45,7 +54,10 @@ macro_rules! impl_read_literal {
                     })
                 }
             } else {
-                Ok(self.reader.$read_func::<BigEndian>().map_err(Error::io)?)
+                let val = self.reader.$read_func::<BigEndian>().map_err(Error::io)?;
+                self.track_read(::core::mem::size_of::<$ty>())?;
+
+                Ok(val)
             }
         }
     };
@@ -70,6 +82,13 @@ where
             format!("insufficient buffer for {}", std::any::type_name::<T>()),
         ))
     }
+
+    fn track_read(&mut self, amount: usize) -> Result<()> {
+        self.remaining = self.remaining.checked_sub(amount).ok_or(Error::data(
+            "Deserializer read past end of serialized value",
+        ))?;
+        Ok(())
+    }
 }
 
 // TODO: Make the deserialization process perform less copying
@@ -91,7 +110,9 @@ where
             }
             buf[0]
         } else {
-            self.reader.read_u8().map_err(Error::io)?
+            let val = self.reader.read_u8().map_err(Error::io)?;
+            self.track_read(core::mem::size_of::<bool>())?;
+            val
         };
 
         visitor.visit_bool(if val == 0 { false } else { true })
@@ -108,7 +129,9 @@ where
             }
             buf[0]
         } else {
-            self.reader.read_u8().map_err(Error::io)?
+            let val = self.reader.read_u8().map_err(Error::io)?;
+            self.track_read(core::mem::size_of::<u8>())?;
+            val
         };
 
         visitor.visit_u8(val)
@@ -125,7 +148,9 @@ where
             }
             buf[0] as i8
         } else {
-            self.reader.read_i8().map_err(Error::io)?
+            let val = self.reader.read_i8().map_err(Error::io)?;
+            self.track_read(core::mem::size_of::<i8>())?;
+            val
         };
 
         visitor.visit_i8(val)
@@ -219,6 +244,8 @@ where
             }
         }
 
+        self.track_read(buffer.len() + 1)?;
+
         let s = str::from_utf8(&buffer).map_err(|_| Error::data("Could not parse string"))?;
         // We don't support UTF-8
         if !s.is_ascii() {
@@ -244,6 +271,8 @@ where
                 n => buffer.push(n),
             }
         }
+
+        self.track_read(buffer.len() + 1)?;
 
         let s = String::from_utf8(buffer).map_err(|_| Error::data("Could not parse string"))?;
         // We don't support UTF-8
@@ -317,8 +346,13 @@ where
             where
                 T: de::DeserializeSeed<'de>,
             {
-                let value = de::DeserializeSeed::deserialize(seed, &mut *self.deserializer)?;
-                Ok(Some(value))
+                match self.deserializer.remaining {
+                    0 => Ok(None),
+                    _ => Ok(Some(de::DeserializeSeed::deserialize(
+                        seed,
+                        &mut *self.deserializer,
+                    )?)),
+                }
             }
 
             fn size_hint(&self) -> Option<usize> {
@@ -468,6 +502,7 @@ impl<'de, 'a, R: io::BufRead> de::VariantAccess<'de> for TerminatorVariant<'de, 
     fn unit_variant(self) -> Result<()> {
         // This was a terminator variant, consume the bytes
         self.deserializer.reader.consume(self.terminator_size);
+        self.deserializer.track_read(self.terminator_size)?;
 
         Ok(())
     }
