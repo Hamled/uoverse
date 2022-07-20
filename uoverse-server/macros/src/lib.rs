@@ -124,7 +124,13 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     // match that to the appropriate packet, or error if none matches
                     match (packet_id, extended_id) {
                         #id_match_arms
-                        _ => Err(Self::Error::data(format!("Unexpected packet ID: {:#0X}", packet_id))),
+                        _ => Err(Self::Error::data(format!(
+                            "Unexpected packet ID: {}",
+                            match extended_id {
+                                Some(ei) => format!("{:#0X}({:#0X})", packet_id, ei),
+                                _ => format!("{:#0X}", packet_id)
+                            }
+                        ))),
                     }
                 }
             }
