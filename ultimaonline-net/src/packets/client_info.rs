@@ -3,14 +3,12 @@ use macros::packet;
 use crate::types::FixedStr;
 
 #[packet(extended(id = 0x05))]
-#[derive(Debug, PartialEq)]
 pub struct WindowSize {
     pub width: u32,
     pub height: u32,
 }
 
 #[packet(extended(id = 0x0B))]
-#[derive(Debug, PartialEq)]
 pub struct Language {
     pub lang: FixedStr<4>,
 }

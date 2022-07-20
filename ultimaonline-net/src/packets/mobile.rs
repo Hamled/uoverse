@@ -23,7 +23,7 @@ pub struct MobLightLevel {
     pub level: u8,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     pub serial: Serial,
     pub type_id: u16,
@@ -32,7 +32,6 @@ pub struct Item {
 }
 
 #[packet(standard(id = 0x77))]
-#[derive(Debug, PartialEq)]
 pub struct State {
     pub serial: Serial,
     pub body: Graphic,
@@ -46,7 +45,6 @@ pub struct State {
 }
 
 #[packet(standard(id = 0x78, var_size = true))]
-#[derive(Debug, PartialEq)]
 pub struct Appearance {
     pub state: State,
     pub items: ListTerm<Item, u32>,

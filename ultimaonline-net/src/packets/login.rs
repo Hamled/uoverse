@@ -48,7 +48,6 @@ pub enum LoginRejectionReason {
 }
 
 #[packet(standard(id = 0x82))]
-#[derive(Debug, PartialEq)]
 pub struct LoginRejection {
     pub reason: LoginRejectionReason,
 }
@@ -63,7 +62,6 @@ pub struct ServerInfo {
 }
 
 #[packet(standard(id = 0xA8, var_size = true))]
-#[derive(Debug, PartialEq)]
 pub struct ServerList {
     pub flags: u8,
     pub list: List<ServerInfo, u16>,
@@ -75,7 +73,6 @@ pub struct ServerSelection {
 }
 
 #[packet(standard(id = 0x8C))]
-#[derive(Debug, PartialEq)]
 pub struct GameServerHandoff {
     pub socket: SocketAddrV4,
     pub ticket: u32,

@@ -51,7 +51,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     quote! {
-        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
         #main_struct
 
         impl #main_ident {

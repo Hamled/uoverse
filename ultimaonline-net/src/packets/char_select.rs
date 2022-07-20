@@ -202,7 +202,6 @@ pub struct VersionReq {
 }
 
 #[packet(standard(id = 0xBD, var_size = true))]
-#[derive(Debug, PartialEq)]
 pub struct VersionResp {
     pub version: String,
 }
