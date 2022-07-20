@@ -75,3 +75,36 @@ pub struct CharStatus {
     // Age of Shadows stats
     pub aos_stats: [Stat; 15],
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::packets::{FromPacketData, Packet};
+    use crate::ser::to_writer;
+    mod login_complete {
+        use super::*;
+
+        #[test]
+        fn serialize() {
+            let expected_bytes = [0x55u8];
+
+            let mut packet = Vec::<u8>::new();
+            to_writer(&mut packet, &Packet::<_>::from(&LoginComplete {}))
+                .expect("Failed to write packet");
+
+            assert_eq!(packet.as_slice(), expected_bytes);
+        }
+
+        #[test]
+        fn deserialize() {
+            let login_complete = LoginComplete {};
+
+            let mut input: &[u8] = &[0x55u8];
+
+            let parsed =
+                LoginComplete::from_packet_data(&mut input).expect("Failed to parse packet");
+
+            assert_eq!(parsed, login_complete);
+        }
+    }
+}

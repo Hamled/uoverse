@@ -7,9 +7,12 @@ pub mod char_login;
 pub mod char_select;
 pub mod chat;
 pub mod client_info;
+pub mod entity;
+pub mod gump;
 pub mod housing;
 pub mod login;
 pub mod mobile;
+pub mod movement;
 pub mod network;
 pub mod world;
 

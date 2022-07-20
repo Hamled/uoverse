@@ -1,12 +1,18 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 use tokio::sync::mpsc;
 use ultimaonline_net::{
     error::{Error, Result},
+    packets::movement,
     types::{Direction, Serial},
 };
+
+use crate::game::client;
 
 use super::client::{Client, ClientReceiver, ClientSender, WorldClient};
 
@@ -43,6 +49,7 @@ impl Server {
             frame += 1;
             println!("Frame: {}", frame);
             {
+                // Update world state
                 let mut world = self
                     .world
                     .lock()
@@ -66,10 +73,36 @@ impl Server {
                     .lock()
                     .map_err(|_| Error::Message("Unable to lock clients vec".to_string()))?;
 
-                let mut closed_clients: Vec<usize> = vec![];
+                let mut closed_clients = HashSet::<usize>::new();
+
+                // Receive client packets
                 for (i, client) in clients.iter_mut().enumerate() {
                     if client.sender.is_closed() {
-                        closed_clients.push(i);
+                        closed_clients.insert(i);
+                        continue;
+                    }
+
+                    loop {
+                        match client.recv()? {
+                            None => break,
+                            Some(client::codecs::InWorldFrameRecv::Request(req)) => {
+                                // Always succeed for now
+                                client.send(
+                                    movement::Success {
+                                        sequence: req.sequence,
+                                        notoriety: types::Notoriety::Ally,
+                                    }
+                                    .into(),
+                                )?;
+                            }
+                            _ => {} // Skip everything
+                        }
+                    }
+                }
+
+                for (i, client) in clients.iter_mut().enumerate() {
+                    if client.sender.is_closed() {
+                        closed_clients.insert(i);
                         continue;
                     }
 
@@ -89,10 +122,11 @@ impl Server {
                     )?;
                 }
 
+                let mut closed_clients: Vec<&usize> = closed_clients.iter().collect();
                 closed_clients.sort();
                 closed_clients.reverse();
                 for i in closed_clients {
-                    clients.remove(i);
+                    clients.remove(*i);
                 }
             }
 

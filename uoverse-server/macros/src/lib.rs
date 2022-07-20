@@ -89,7 +89,25 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 .iter()
                 .map(|p| &p.segments.last().unwrap().ident);
             quote! {
-               #( (#pkts::PACKET_ID, #pkts::EXTENDED_ID) => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+               #( (#pkts::PACKET_ID, #pkts::EXTENDED_ID) => {
+                   let ready = match #pkts::SIZE {
+                       Some(size) if size <= src.remaining() => true,
+                       None => match chunk.len() {
+                           3.. => (unsafe {
+                                    u16::from_be_bytes(chunk[1..3].try_into().unwrap_unchecked())
+                                }) as usize <= src.remaining(),
+                           _ => false,
+                       },
+                       _ => false,
+                   };
+
+                   Ok(if ready {
+                       Some(#names(#pkts::from_packet_data(&mut src.reader())?))
+                   } else {
+                       None
+                   })
+                  }
+               ),*,
             }
         } else {
             quote! {}
@@ -109,14 +127,16 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     use #frame_name::*;
 
                     // Peek at the first byte
-                    if src.len() < 1 { return Ok(None); }
-                    let packet_id = src[0];
+                    if !src.has_remaining() { return Ok(None); }
+
+                    let chunk = src.chunk();
+                    let packet_id = chunk[0];
 
                     // Peek for extended packet id
                     let extended_id = match packet_id {
                         packets::EXTENDED_PACKET_ID => {
-                            if src.len() < 5 { return Ok(None); }
-                            Some(u16::from_be_bytes(src[3..5].try_into().unwrap()))
+                            if chunk.len() < 5 { return Ok(None); }
+                            Some(u16::from_be_bytes(chunk[3..5].try_into().unwrap()))
                         },
                         _ => None
                     };
@@ -124,7 +144,13 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                     // match that to the appropriate packet, or error if none matches
                     match (packet_id, extended_id) {
                         #id_match_arms
-                        _ => Err(Self::Error::data(format!("Unexpected packet ID: {:#0X}", packet_id))),
+                        _ => Err(Self::Error::data(format!(
+                            "Unexpected packet ID: {}",
+                            match extended_id {
+                                Some(ei) => format!("{:#0X}({:#0X})", packet_id, ei),
+                                _ => format!("{:#0X}", packet_id)
+                            }
+                        ))),
                     }
                 }
             }
