@@ -1,7 +1,7 @@
 use futures::sink::SinkExt;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::mpsc,
+    sync::mpsc::{self, error::TryRecvError},
 };
 use tokio_stream::StreamExt;
 use tokio_util::codec::Framed;
@@ -170,7 +170,7 @@ pub trait ClientSender {
 
 pub trait ClientReceiver {
     type RecvItem;
-    fn recv(&mut self) -> Result<Self::RecvItem>;
+    fn recv(&mut self) -> Result<Option<Self::RecvItem>>;
 
     fn close(&mut self);
 }
@@ -191,10 +191,12 @@ impl ClientSender for Client {
 
 impl ClientReceiver for Client {
     type RecvItem = codecs::InWorldFrameSend;
-    fn recv(&mut self) -> Result<Self::RecvItem> {
-        self.receiver
-            .try_recv()
-            .map_err(|_| Error::Message("TODO: MPSC recv error".to_string()))
+    fn recv(&mut self) -> Result<Option<Self::RecvItem>> {
+        match self.receiver.try_recv() {
+            Ok(item) => Ok(Some(item)),
+            Err(TryRecvError::Empty) => Ok(None),
+            _ => Err(Error::Message("TODO: MPSC recv error".to_string())),
+        }
     }
 
     fn close(&mut self) {
@@ -218,10 +220,12 @@ impl ClientSender for WorldClient {
 
 impl ClientReceiver for WorldClient {
     type RecvItem = codecs::InWorldFrameRecv;
-    fn recv(&mut self) -> Result<Self::RecvItem> {
-        self.receiver
-            .try_recv()
-            .map_err(|_| Error::Message("TODO: MPSC recv error".to_string()))
+    fn recv(&mut self) -> Result<Option<Self::RecvItem>> {
+        match self.receiver.try_recv() {
+            Ok(item) => Ok(Some(item)),
+            Err(TryRecvError::Empty) => Ok(None),
+            _ => Err(Error::Message("TODO: MPSC recv error".to_string())),
+        }
     }
 
     fn close(&mut self) {
