@@ -89,7 +89,25 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 .iter()
                 .map(|p| &p.segments.last().unwrap().ident);
             quote! {
-               #( (#pkts::PACKET_ID, #pkts::EXTENDED_ID) => Ok(Some(#names(#pkts::from_packet_data(&mut src.reader())?))) ),*,
+               #( (#pkts::PACKET_ID, #pkts::EXTENDED_ID) => {
+                   let ready = match #pkts::SIZE {
+                       Some(size) if size <= src.remaining() => true,
+                       None => match chunk.len() {
+                           3.. => (unsafe {
+                                    u16::from_be_bytes(chunk[1..3].try_into().unwrap_unchecked())
+                                }) as usize <= src.remaining(),
+                           _ => false,
+                       },
+                       _ => false,
+                   };
+
+                   Ok(if ready {
+                       Some(#names(#pkts::from_packet_data(&mut src.reader())?))
+                   } else {
+                       None
+                   })
+                  }
+               ),*,
             }
         } else {
             quote! {}
