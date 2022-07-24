@@ -2,10 +2,7 @@ use std::{
     convert::TryInto,
     env,
     net::{Ipv4Addr, SocketAddrV4},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
 use tokio::net::TcpListener;
 use tokio::{
@@ -43,19 +40,18 @@ pub async fn main() {
 
     println!("Game server listening on {}", listen_socket);
 
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let server = Arc::new(server::Server::new());
     let shutdown_notice = Arc::new(Notify::new());
     {
-        let shutdown = shutdown.clone();
+        let server = server.clone();
         let shutdown_notice = shutdown_notice.clone();
         ctrlc::set_handler(move || {
-            shutdown.store(true, Ordering::Relaxed);
+            server.shutdown();
             shutdown_notice.notify_one();
         })
         .expect("Error setting Ctrl-C signal handler");
     }
 
-    let server = Arc::new(server::Server::new(shutdown.clone()));
     let server_task = {
         let server = server.clone();
         tokio::spawn(async move { server.run_loop().await })

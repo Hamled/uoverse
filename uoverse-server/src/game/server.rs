@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Mutex,
     },
 };
 use tokio::sync::mpsc;
@@ -22,7 +22,7 @@ struct World {
 }
 
 pub struct Server {
-    shutdown: Arc<AtomicBool>,
+    shutdown: AtomicBool,
     clients: Mutex<Vec<WorldClient>>,
     world: Mutex<World>,
 }
@@ -30,9 +30,9 @@ pub struct Server {
 const PLAYER_SERIAL: Serial = 3833;
 
 impl Server {
-    pub fn new(shutdown: Arc<AtomicBool>) -> Self {
+    pub fn new() -> Self {
         Server {
-            shutdown,
+            shutdown: AtomicBool::new(false),
             clients: Mutex::new(vec![]),
             world: Mutex::new(World {
                 mob_x: 3668,
@@ -240,5 +240,9 @@ impl Server {
         )?;
 
         Ok(())
+    }
+
+    pub fn shutdown(&self) {
+        self.shutdown.store(true, Ordering::Relaxed)
     }
 }
