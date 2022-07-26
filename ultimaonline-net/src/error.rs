@@ -1,13 +1,15 @@
 use serde::{de, ser};
-use std::fmt;
-use std::io;
+use std::{fmt, io};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{0}")]
     Message(String),
-    Io(io::Error),
+    #[error("{0}")]
+    Io(#[from] io::Error),
+    #[error("Invalid data: {0}")]
     Data(String),
 }
 
@@ -23,30 +25,12 @@ impl de::Error for Error {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Error::Message(msg) => formatter.write_str(msg),
-            Error::Io(err) => fmt::Display::fmt(err, formatter),
-            Error::Data(msg) => formatter.write_str(format!("Invalid data: {}", msg).as_str()),
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::Io(err)
-    }
-}
-
 impl Error {
     pub fn io(err: std::io::Error) -> Self {
         Error::Io(err)
     }
 
-    pub fn data<T: Into<String>>(msg: T) -> Self {
+    pub fn data(msg: impl Into<String>) -> Self {
         Error::Data(msg.into())
     }
 }
-
-impl std::error::Error for Error {}
