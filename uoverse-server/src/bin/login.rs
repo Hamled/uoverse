@@ -1,3 +1,4 @@
+use eyre::{eyre, Context, Result};
 use std::{
     convert::TryInto,
     env,
@@ -5,7 +6,6 @@ use std::{
 };
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
-use ultimaonline_net::error::{Error, Result};
 use uoverse_server::login::client::*;
 
 const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
@@ -15,7 +15,7 @@ const DEFAULT_GAME_ADDR: Ipv4Addr = DEFAULT_LISTEN_ADDR;
 const DEFAULT_GAME_PORT: u16 = DEFAULT_LISTEN_PORT + 1;
 
 #[tokio::main]
-pub async fn main() {
+pub async fn main() -> Result<()> {
     let mut listen_addr = DEFAULT_LISTEN_ADDR;
     let mut listen_port = DEFAULT_LISTEN_PORT;
 
@@ -51,13 +51,13 @@ pub async fn main() {
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
-            match process(&mut socket, game_socket).await {
-                Err(err) => println!("Client had error: {}", err),
-                Ok(()) => {
-                    println!("Client disconnected.");
-                    socket.shutdown().await.unwrap();
-                }
-            }
+            process(&mut socket, game_socket)
+                .await
+                .wrap_err("Client had error during login")?;
+
+            println!("Client disconnected.");
+            socket.shutdown().await.unwrap();
+            Ok::<(), eyre::Report>(())
         });
     }
 }
@@ -68,7 +68,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
     let mut state = Connected::new(socket);
     let hello = match state.recv().await? {
         Some(codecs::ConnectedFrameRecv::ClientHello(hello)) => hello,
-        _ => return Err(Error::data("Did not get ClientHello packet")),
+        _ => return Err(eyre!("Did not get ClientHello packet")),
     };
 
     println!(
@@ -79,7 +79,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
     let mut state = Hello::<Io>::from(state);
     let login = match state.recv().await? {
         Some(codecs::HelloFrameRecv::AccountLogin(login)) => login,
-        _ => return Err(Error::data("Did not get AccountLogin packet")),
+        _ => return Err(eyre!("Did not get AccountLogin packet")),
     };
 
     let username = TryInto::<&str>::try_into(&login.username).expect("Invalid UTF-8 in username");
@@ -124,7 +124,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
         Some(codecs::ServerSelectFrameRecv::ServerSelection(packets::ServerSelection {
             index,
         })) => index,
-        _ => return Err(Error::data("Did not get ServerSelection packet")),
+        _ => return Err(eyre!("Did not get ServerSelection packet")),
     };
 
     println!("Got server selection: {}", selection);

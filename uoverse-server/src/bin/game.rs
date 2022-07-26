@@ -1,18 +1,16 @@
+use eyre::{eyre, Context, Result};
 use std::{
     convert::TryInto,
     env,
     net::{Ipv4Addr, SocketAddrV4},
     sync::Arc,
 };
-use tokio::net::TcpListener;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::Notify,
 };
-use ultimaonline_net::{
-    error::{Error, Result},
-    types::Serial,
-};
+use tokio::{net::TcpListener, task::JoinHandle};
+use ultimaonline_net::types::Serial;
 use uoverse_server::game::client::{self, *};
 use uoverse_server::game::server;
 
@@ -20,7 +18,7 @@ const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 const DEFAULT_LISTEN_PORT: u16 = 2594;
 
 #[tokio::main]
-pub async fn main() {
+pub async fn main() -> Result<()> {
     let mut listen_addr = DEFAULT_LISTEN_ADDR;
     let mut listen_port = DEFAULT_LISTEN_PORT;
 
@@ -52,9 +50,9 @@ pub async fn main() {
         .expect("Error setting Ctrl-C signal handler");
     }
 
-    let server_task = {
+    let server_task: JoinHandle<Result<()>> = {
         let server = server.clone();
-        tokio::spawn(async move { server.run_loop().await })
+        tokio::spawn(async move { Ok(server.run_loop().await?) })
     };
 
     loop {
@@ -62,18 +60,9 @@ pub async fn main() {
             Ok((mut socket, _)) = listener.accept() => {
                 let server = server.clone();
                 tokio::spawn(async move {
-                    match preworld(&mut socket).await {
-                        Err(err) => println!("Client had error in pre-world: {}", err),
-                        Ok(state) => {
-                            println!("Client completed pre-world.");
-                            match in_world(server, state).await {
-                                Err(err) => println!("Client had error in-world: {}", err),
-                                Ok(()) => {
-                                    println!("Client disconnected.");
-                                    socket.shutdown().await.unwrap();
-                                }
-                            }
-                        }
+                    match process(&mut socket, server).await {
+                        Err(err) => println!("{:#}", err),
+                        Ok(()) => {}
                     }
                 });
             }
@@ -85,12 +74,29 @@ pub async fn main() {
         }
     }
 
-    match server_task.await.expect("Error joining server task") {
-        Err(err) => println!("Server task had error: {}", err),
-        Ok(()) => {
-            println!("Shutdown complete.");
-        }
-    }
+    server_task
+        .await
+        .expect("Error joining server task")
+        .wrap_err("Server error")?;
+
+    println!("Shutdown complete.");
+    Ok(())
+}
+
+async fn process<Io: AsyncIo>(mut socket: Io, server: Arc<server::Server>) -> Result<()> {
+    let state = preworld(&mut socket)
+        .await
+        .wrap_err("Client did not complete pre-world")?;
+
+    println!("Client completed pre-world.");
+    in_world(server, state)
+        .await
+        .wrap_err("Client had error during in-world")?;
+
+    println!("Client disconnected.");
+    socket.shutdown().await?;
+
+    Ok(())
 }
 
 async fn preworld<Io: AsyncIo>(socket: Io) -> Result<InWorld<Io>> {
@@ -113,7 +119,7 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
     let mut state = Connected::new(socket);
     let login = match state.recv().await? {
         Some(codecs::ConnectedFrameRecv::GameLogin(login)) => login,
-        _ => return Err(Error::data("Did not get GameLogin packet")),
+        _ => return Err(eyre!("Did not get GameLogin packet")),
     };
 
     let username = TryInto::<&str>::try_into(&login.username).expect("Invalid UTF-8 in username");
@@ -267,7 +273,7 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
         Some(codecs::ClientVersionFrameRecv::VersionResp(packets::VersionResp { version })) => {
             version
         }
-        _ => return Err(Error::data("Did not get VersionResp packet")),
+        _ => return Err(eyre!("Did not get VersionResp packet")),
     };
 
     println!("Got client version: {}", version);
@@ -279,7 +285,7 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
     use ultimaonline_net::{packets::*, types};
     let create_info = match state.recv().await? {
         Some(codecs::CharSelectFrameRecv::CreateCharacter(info)) => info,
-        _ => return Err(Error::data("Did not get CreateCharacter packet")),
+        _ => return Err(eyre!("Did not get CreateCharacter packet")),
     };
 
     println!(
@@ -367,18 +373,15 @@ async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<I
     loop {
         tokio::select! {
             res = state.recv() => {
-                match res {
-                    Ok(Some(InWorldFrameRecv::PingReq(PingReq {val}))) => {
+                match res? {
+                    Some(InWorldFrameRecv::PingReq(PingReq {val})) => {
                         state.send(&PingAck{val}).await?
                     },
-                    Ok(Some(packet)) => client.send(packet)?,
-                    Ok(None) => {
+                    Some(packet) => client.send(packet)?,
+                    None => {
                         println!("Client connection closed.");
                         break;
                     },
-                    Err(err) => {
-                        println!("Client had error in-world: {}", err);
-                    }
                 }
             },
 
