@@ -16,6 +16,9 @@ uoverse-server-macros = { path = "macros" }
 serde = { version = "1.0.119" }
 erased-serde = "0.3.21"
 ctrlc = "3.2.2"
+eyre = "0.6"
+tracing = "0.1"
+tracing-subscriber = {version = "0.3", features = ["env-filter"]}
 
 [[bin]]
 name = "login"

@@ -172,8 +172,6 @@ mod tests {
                 0x00, 0x00, 0x08, 0x8A, 0x8A, 0x8B, 0x8C, 0x8C, 0x00, 0x00, 0x00, 0x00,
             ];
 
-            println!("Packet len: {:x}", input.len());
-
             let parsed = Appearance::from_packet_data(&mut input).expect("Failed to parse packet");
 
             assert_eq!(parsed, appearance);

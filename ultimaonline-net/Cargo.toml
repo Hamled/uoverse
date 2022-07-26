@@ -12,3 +12,4 @@ serde = { version = "1.0.119", features = ["derive"] }
 serde_repr = "0.1.6"
 ultimaonline-net-macros = { path = "macros" }
 paste = "1.0.7"
+thiserror = "1.0"

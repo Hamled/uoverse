@@ -1,21 +1,18 @@
+use eyre::{eyre, Context, Result};
 use std::{
     convert::TryInto,
     env,
     net::{Ipv4Addr, SocketAddrV4},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
-use tokio::net::TcpListener;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::Notify,
 };
-use ultimaonline_net::{
-    error::{Error, Result},
-    types::Serial,
-};
+use tokio::{net::TcpListener, task::JoinHandle};
+use tracing::{debug_span, debug, error, info_span, info};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+use ultimaonline_net::types::Serial;
 use uoverse_server::game::client::{self, *};
 use uoverse_server::game::server;
 
@@ -23,7 +20,7 @@ const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 const DEFAULT_LISTEN_PORT: u16 = 2594;
 
 #[tokio::main]
-pub async fn main() {
+pub async fn main() -> Result<()> {
     let mut listen_addr = DEFAULT_LISTEN_ADDR;
     let mut listen_port = DEFAULT_LISTEN_PORT;
 
@@ -31,34 +28,39 @@ pub async fn main() {
     if args.len() > 1 {
         listen_addr = args[1]
             .parse()
-            .expect(format!("Invalid listen address: {}", &args[1]).as_str())
+            .expect(format!("Invalid listen address: {}", &args[1]).as_str());
     }
     if args.len() > 2 {
         listen_port = u16::from_str_radix(&args[2], 10)
             .expect(format!("Invalid listen port: {}", &args[2]).as_str());
     }
 
+
     let listen_socket = SocketAddrV4::new(listen_addr, listen_port);
+
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+
+    let span = info_span!("server");
+    let _ = span.enter();
+
     let listener = TcpListener::bind(listen_socket).await.unwrap();
+    info!(socket = %listen_socket, "Game server listening on {}", listen_socket);
 
-    println!("Game server listening on {}", listen_socket);
-
-    let shutdown = Arc::new(AtomicBool::new(false));
+    let server = Arc::new(server::Server::new());
     let shutdown_notice = Arc::new(Notify::new());
     {
-        let shutdown = shutdown.clone();
+        let server = server.clone();
         let shutdown_notice = shutdown_notice.clone();
         ctrlc::set_handler(move || {
-            shutdown.store(true, Ordering::Relaxed);
+            server.shutdown();
             shutdown_notice.notify_one();
         })
         .expect("Error setting Ctrl-C signal handler");
     }
 
-    let server = Arc::new(server::Server::new(shutdown.clone()));
-    let server_task = {
+    let server_task: JoinHandle<Result<()>> = {
         let server = server.clone();
-        tokio::spawn(async move { server.run_loop().await })
+        tokio::spawn(async move { Ok(server.run_loop().await?) })
     };
 
     loop {
@@ -66,39 +68,53 @@ pub async fn main() {
             Ok((mut socket, _)) = listener.accept() => {
                 let server = server.clone();
                 tokio::spawn(async move {
-                    match preworld(&mut socket).await {
-                        Err(Error::Data(err)) => println!("Client had error in pre-world: {}", err),
-                        Err(Error::Io(err)) => println!("Client had error in pre-world: {}", err),
-                        Err(Error::Message(err)) => println!("Client had error in pre-world: {}", err),
-                        Ok(state) => {
-                            println!("Client completed pre-world.");
-                            match in_world(server, state).await {
-                                Err(err) => println!("Client had error in-world: {}", err),
-                                Ok(()) => {
-                                    println!("Client disconnected.");
-                                    socket.shutdown().await.unwrap();
-                                }
-                            }
-                        }
+                    match process(&mut socket, server).await {
+                        Err(err) => error!("{:#}", err),
+                        Ok(()) => {}
                     }
                 });
             }
 
             _ = shutdown_notice.notified() => {
-                println!("Stopped listening on {}", listen_socket);
+                info!(socket = %listen_socket, "Stopped listening on {}", listen_socket);
                 break;
             }
         }
     }
 
-    match server_task.await.expect("Error joining server task") {
-        Err(Error::Message(err)) => println!("Server task had error: {}", err),
-        Err(Error::Io(err)) => println!("Server task had error: {}", err),
-        Err(Error::Data(err)) => println!("Server task had error: {}", err),
-        Ok(()) => {
-            println!("Shutdown complete.");
-        }
-    }
+    server_task
+        .await
+        .expect("Error joining server task")
+        .wrap_err("Server error")?;
+
+    info!("Shutdown complete.");
+    Ok(())
+}
+
+async fn process<Io: AsyncIo>(mut socket: Io, server: Arc<server::Server>) -> Result<()> {
+    let span = debug_span!("client");
+    let _ = span.enter();
+
+    let preworld_span = debug_span!(parent: &span, "preworld");
+    let span_guard = preworld_span.enter();
+    let state = preworld(&mut socket)
+        .await
+        .wrap_err("Client did not complete pre-world")?;
+
+    debug!("Client completed pre-world.");
+    drop(span_guard);
+
+    let inworld_span = debug_span!(parent: &span, "in-world");
+    let span_guard = inworld_span.enter();
+    in_world(server, state)
+        .await
+        .wrap_err("Client had error during in-world")?;
+    drop(span_guard);
+
+    debug!("Client disconnected.");
+    socket.shutdown().await?;
+
+    Ok(())
 }
 
 async fn preworld<Io: AsyncIo>(socket: Io) -> Result<InWorld<Io>> {
@@ -121,12 +137,13 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
     let mut state = Connected::new(socket);
     let login = match state.recv().await? {
         Some(codecs::ConnectedFrameRecv::GameLogin(login)) => login,
-        _ => return Err(Error::data("Did not get GameLogin packet")),
+        _ => return Err(eyre!("Did not get GameLogin packet")),
     };
 
     let username = TryInto::<&str>::try_into(&login.username).expect("Invalid UTF-8 in username");
     let password = TryInto::<&str>::try_into(&login.password).expect("Invalid UTF-8 in password");
-    println!(
+    debug!(
+        %username, %password, seed = login.seed,
         "Got account login. Username: {}, Password: {}, Seed: {}",
         username, password, login.seed
     );
@@ -275,10 +292,10 @@ async fn handshake<Io: AsyncIo>(mut socket: Io) -> Result<CharSelect<Io>> {
         Some(codecs::ClientVersionFrameRecv::VersionResp(packets::VersionResp { version })) => {
             version
         }
-        _ => return Err(Error::data("Did not get VersionResp packet")),
+        _ => return Err(eyre!("Did not get VersionResp packet")),
     };
 
-    println!("Got client version: {}", version);
+    debug!(version = %version, "Got client version: {}", version);
 
     Ok(CharSelect::<Io>::from(state))
 }
@@ -287,17 +304,18 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
     use ultimaonline_net::{packets::*, types};
     let create_info = match state.recv().await? {
         Some(codecs::CharSelectFrameRecv::CreateCharacter(info)) => info,
-        _ => return Err(Error::data("Did not get CreateCharacter packet")),
+        _ => return Err(eyre!("Did not get CreateCharacter packet")),
     };
 
-    println!(
-        "Create character named: {}",
-        TryInto::<&str>::try_into(&create_info.name).unwrap()
+    let name: &str = (&create_info.name).try_into()?;
+    debug!(
+        char_name = %name,
+        "Create character named: {}", name
     );
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    println!("Sending character into world");
+    debug!(char_name = %name, "Sending character into world");
 
     let mut state = CharLogin::<Io>::from(state);
 
@@ -375,18 +393,15 @@ async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<I
     loop {
         tokio::select! {
             res = state.recv() => {
-                match res {
-                    Ok(Some(InWorldFrameRecv::PingReq(PingReq {val}))) => {
+                match res? {
+                    Some(InWorldFrameRecv::PingReq(PingReq {val})) => {
                         state.send(&PingAck{val}).await?
                     },
-                    Ok(Some(packet)) => client.send(packet)?,
-                    Ok(None) => {
-                        println!("Client connection closed.");
+                    Some(packet) => client.send(packet)?,
+                    None => {
+                        debug!("Client connection closed.");
                         break;
                     },
-                    Err(err) => {
-                        println!("Client had error in-world: {}", err);
-                    }
                 }
             },
 
@@ -395,7 +410,7 @@ async fn in_world<Io: AsyncIo>(server: Arc<server::Server>, mut state: InWorld<I
                     Some(packet) => state.send_frame(&packet).await?,
                     None => {
                         // TODO: Send packets that inform the client of removal
-                        println!("Client removed from world.");
+                        debug!("Client removed from world.");
                         break;
                     }
                 }

@@ -2,10 +2,11 @@ use std::{
     collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Mutex,
     },
 };
 use tokio::sync::mpsc;
+use tracing::{debug, info, trace_span, trace};
 use ultimaonline_net::{
     error::{Error, Result},
     packets::movement,
@@ -22,7 +23,7 @@ struct World {
 }
 
 pub struct Server {
-    shutdown: Arc<AtomicBool>,
+    shutdown: AtomicBool,
     clients: Mutex<Vec<WorldClient>>,
     world: Mutex<World>,
 }
@@ -30,9 +31,9 @@ pub struct Server {
 const PLAYER_SERIAL: Serial = 3833;
 
 impl Server {
-    pub fn new(shutdown: Arc<AtomicBool>) -> Self {
+    pub fn new() -> Self {
         Server {
-            shutdown,
+            shutdown: AtomicBool::new(false),
             clients: Mutex::new(vec![]),
             world: Mutex::new(World {
                 mob_x: 3668,
@@ -44,10 +45,13 @@ impl Server {
     pub async fn run_loop(&self) -> Result<()> {
         use ultimaonline_net::{packets::mobile, types};
 
+        let span = trace_span!("server");
+        let _ = span.enter();
+
         let mut frame = 0;
         while !self.shutdown.load(Ordering::Relaxed) {
             frame += 1;
-            println!("Frame: {}", frame);
+            trace!("Frame: {}", frame);
             {
                 // Update world state
                 let mut world = self
@@ -142,7 +146,7 @@ impl Server {
             client.close();
         }
 
-        println!("Server shutting down.");
+        info!("Server shutting down.");
         Ok(())
     }
 
@@ -158,7 +162,7 @@ impl Server {
         };
 
         self.enter_world(&mut client)?;
-        println!("Client completed enter world.");
+        debug!("Client completed enter world.");
 
         self.clients
             .lock()
@@ -240,5 +244,9 @@ impl Server {
         )?;
 
         Ok(())
+    }
+
+    pub fn shutdown(&self) {
+        self.shutdown.store(true, Ordering::Relaxed)
     }
 }

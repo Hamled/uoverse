@@ -1,52 +1,45 @@
 use serde::{de, ser};
-use std::fmt;
-use std::io;
+use std::{fmt, io};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[non_exhaustive]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{0}")]
     Message(String),
-    Io(io::Error),
+    #[error("serialization failed because {0}")]
+    Serialization(String),
+    #[error("deserialization failed because {0}")]
+    Deserialization(String),
+    #[error("{0}")]
+    Io(#[from] io::Error),
+    #[error("packet data is invalid because {0}")]
     Data(String),
 }
 
 impl ser::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        Error::Message(msg.to_string())
+        Error::Serialization(msg.to_string())
     }
 }
 
 impl de::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        Error::Message(msg.to_string())
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Error::Message(msg) => formatter.write_str(msg),
-            Error::Io(err) => fmt::Display::fmt(err, formatter),
-            Error::Data(msg) => formatter.write_str(format!("Invalid data: {}", msg).as_str()),
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::Io(err)
+        Error::Deserialization(msg.to_string())
     }
 }
 
 impl Error {
-    pub fn io(err: std::io::Error) -> Self {
-        Error::Io(err)
-    }
-
-    pub fn data<T: Into<String>>(msg: T) -> Self {
+    pub fn data(msg: impl Into<String>) -> Self {
         Error::Data(msg.into())
     }
-}
 
-impl std::error::Error for Error {}
+    pub fn ser(msg: impl Into<String>) -> Self {
+        Error::Serialization(msg.into())
+    }
+
+    pub fn de(msg: impl Into<String>) -> Self {
+        Error::Deserialization(msg.into())
+    }
+}
