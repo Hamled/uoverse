@@ -6,6 +6,8 @@ use std::{
 };
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
+use tracing::{debug_span, debug, info_span, info};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use uoverse_server::login::client::*;
 
 const DEFAULT_LISTEN_ADDR: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
@@ -23,7 +25,7 @@ pub async fn main() -> Result<()> {
     if args.len() > 1 {
         listen_addr = args[1]
             .parse()
-            .expect(format!("Invalid listen address: {}", &args[1]).as_str())
+            .expect(format!("Invalid listen address: {}", &args[1]).as_str());
     }
     if args.len() > 2 {
         listen_port = u16::from_str_radix(&args[2], 10)
@@ -31,9 +33,6 @@ pub async fn main() -> Result<()> {
     }
 
     let listen_socket = SocketAddrV4::new(listen_addr, listen_port);
-    let listener = TcpListener::bind(listen_socket).await.unwrap();
-
-    println!("Login server listening on {}", listen_socket);
 
     let mut game_addr = DEFAULT_GAME_ADDR;
     let mut game_port = DEFAULT_GAME_PORT;
@@ -48,6 +47,15 @@ pub async fn main() -> Result<()> {
     }
     let game_socket = SocketAddrV4::new(game_addr, game_port);
 
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+
+    let span = info_span!("server");
+    let _ = span.enter();
+
+    let listener = TcpListener::bind(listen_socket).await.unwrap();
+    info!(socket = %listen_socket, "Login server listening on {}", listen_socket);
+    info!(socket = %game_socket, "Using game server socket {}", game_socket);
+
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
@@ -55,7 +63,7 @@ pub async fn main() -> Result<()> {
                 .await
                 .wrap_err("Client had error during login")?;
 
-            println!("Client disconnected.");
+            info!("Client disconnected.");
             socket.shutdown().await.unwrap();
             Ok::<(), eyre::Report>(())
         });
@@ -65,13 +73,17 @@ pub async fn main() -> Result<()> {
 async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<()> {
     use ultimaonline_net::packets::login as packets;
 
+    let span = debug_span!("client_process");
+    let _ = span.enter();
+
     let mut state = Connected::new(socket);
     let hello = match state.recv().await? {
         Some(codecs::ConnectedFrameRecv::ClientHello(hello)) => hello,
         _ => return Err(eyre!("Did not get ClientHello packet")),
     };
 
-    println!(
+    debug!(
+        seed = hello.seed, version = %hello.version,
         "Got client hello. Seed: {}, Version: {}",
         hello.seed, hello.version
     );
@@ -84,7 +96,8 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
 
     let username = TryInto::<&str>::try_into(&login.username).expect("Invalid UTF-8 in username");
     let password = TryInto::<&str>::try_into(&login.password).expect("Invalid UTF-8 in password");
-    println!(
+    debug!(
+        %username, %password,
         "Got account login. Username: {}, Password: {}",
         username, password
     );
@@ -93,6 +106,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
     // TODO: Actually authenticate user and authorize for logging in
     // Check the password
     if &password[..4] != "test" {
+        debug!("Account password invalid, rejecting login request");
         // Reject login
         state
             .send(&packets::LoginRejection {
@@ -127,7 +141,7 @@ async fn process<Io: AsyncIo>(socket: Io, game_socket: SocketAddrV4) -> Result<(
         _ => return Err(eyre!("Did not get ServerSelection packet")),
     };
 
-    println!("Got server selection: {}", selection);
+    debug!("Got server selection: {}", selection);
 
     let mut state = Handoff::<Io>::from(state);
 

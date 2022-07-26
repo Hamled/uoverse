@@ -6,6 +6,7 @@ use std::{
     },
 };
 use tokio::sync::mpsc;
+use tracing::{debug, info, trace_span, trace};
 use ultimaonline_net::{
     error::{Error, Result},
     packets::movement,
@@ -44,10 +45,13 @@ impl Server {
     pub async fn run_loop(&self) -> Result<()> {
         use ultimaonline_net::{packets::mobile, types};
 
+        let span = trace_span!("server");
+        let _ = span.enter();
+
         let mut frame = 0;
         while !self.shutdown.load(Ordering::Relaxed) {
             frame += 1;
-            println!("Frame: {}", frame);
+            trace!("Frame: {}", frame);
             {
                 // Update world state
                 let mut world = self
@@ -142,7 +146,7 @@ impl Server {
             client.close();
         }
 
-        println!("Server shutting down.");
+        info!("Server shutting down.");
         Ok(())
     }
 
@@ -158,7 +162,7 @@ impl Server {
         };
 
         self.enter_world(&mut client)?;
-        println!("Client completed enter world.");
+        debug!("Client completed enter world.");
 
         self.clients
             .lock()
