@@ -149,7 +149,7 @@ fn content_from_packet(name: &syn::Ident, args: &PacketArgs) -> proc_macro2::Tok
             // Parse out the extended id
             let extended_id = reader.read_u16::<BigEndian>()?;
             if(extended_id != #id) {
-                return Err(Error::data(format!("Packet extended ID {:#0X} did not match expected {:#0X}", extended_id, #id)));
+                return Err(Error::data(format!("packet extended id {:#0X} did not match expected {:#0X}", extended_id, #id)));
             }
 
             let size = size - 2; // Extended ID
@@ -171,7 +171,7 @@ fn content_from_packet(name: &syn::Ident, args: &PacketArgs) -> proc_macro2::Tok
                 // Parse out the packet header
                 let packet_id = reader.read_u8()?;
                 if(packet_id != #id) {
-                    return Err(Error::data(format!("Packet ID {:#0X} did not match expected {:#0X}", packet_id, #id)));
+                    return Err(Error::data(format!("packet id {:#0X} did not match expected {:#0X}", packet_id, #id)));
                 }
 
                 #size_check

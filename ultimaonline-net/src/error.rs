@@ -9,7 +9,7 @@ pub enum Error {
     Message(String),
     #[error("{0}")]
     Io(#[from] io::Error),
-    #[error("Invalid data: {0}")]
+    #[error("packet data is invalid because {0}")]
     Data(String),
 }
 

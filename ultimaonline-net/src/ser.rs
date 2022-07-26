@@ -156,7 +156,7 @@ where
                 writer.write_all(&buf)?;
             }
         } else {
-            Err(Error::data("Unsupported string encoding"))?;
+            Err(Error::data("non-ASCII string encoding is unsupported"))?;
         }
 
         Ok(())
@@ -173,7 +173,7 @@ where
 
             self.end_null()
         } else {
-            Err(Error::data("Unsupported string encoding"))
+            Err(Error::data("non-ASCII string encoding is unsupported"))
         }
     }
 
@@ -191,7 +191,7 @@ where
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         if let Some(len) = len {
             if len > u16::MAX as usize {
-                return Err(Error::data("Sequence is too long"));
+                return Err(Error::data("sequence is too long"));
             }
         }
 

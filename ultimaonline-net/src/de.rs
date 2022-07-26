@@ -31,7 +31,7 @@ where
     match deserializer.remaining {
         0 => Ok(t),
         _ => Err(Error::data(
-            "Deserializer had data remaining after deserializing value",
+            "deserializer had data remaining after deserializing value",
         )),
     }
 }
@@ -86,7 +86,7 @@ where
 
     fn track_read(&mut self, amount: usize) -> Result<()> {
         self.remaining = self.remaining.checked_sub(amount).ok_or(Error::data(
-            "Deserializer read past end of serialized value",
+            "deserializer read past end of serialized value",
         ))?;
         Ok(())
     }
@@ -247,10 +247,11 @@ where
 
         self.track_read(buffer.len() + 1)?;
 
-        let s = str::from_utf8(&buffer).map_err(|_| Error::data("Could not parse string"))?;
+        let s =
+            str::from_utf8(&buffer).map_err(|_| Error::data("string data could not be parsed"))?;
         // We don't support UTF-8
         if !s.is_ascii() {
-            return Err(Error::data("Unsupported string encoding"));
+            return Err(Error::data("non-ASCII string encoding is unsupported"));
         }
 
         visitor.visit_str(s)
@@ -275,10 +276,11 @@ where
 
         self.track_read(buffer.len() + 1)?;
 
-        let s = String::from_utf8(buffer).map_err(|_| Error::data("Could not parse string"))?;
+        let s = String::from_utf8(buffer)
+            .map_err(|_| Error::data("string data could not be parsed"))?;
         // We don't support UTF-8
         if !s.is_ascii() {
-            return Err(Error::data("Unsupported string encoding"));
+            return Err(Error::data("non-ASCII string encoding is unsupported"));
         }
 
         visitor.visit_string(s)
