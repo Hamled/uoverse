@@ -30,9 +30,7 @@ where
 
     match deserializer.remaining {
         0 => Ok(t),
-        _ => Err(Error::data(
-            "deserializer had data remaining after deserializing value",
-        )),
+        _ => Err(Error::de("data remains after deserializing value")),
     }
 }
 
@@ -85,9 +83,10 @@ where
     }
 
     fn track_read(&mut self, amount: usize) -> Result<()> {
-        self.remaining = self.remaining.checked_sub(amount).ok_or(Error::data(
-            "deserializer read past end of serialized value",
-        ))?;
+        self.remaining = self
+            .remaining
+            .checked_sub(amount)
+            .ok_or(Error::de("read past end of serialized value"))?;
         Ok(())
     }
 }
