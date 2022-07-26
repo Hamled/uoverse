@@ -52,9 +52,7 @@ pub async fn main() {
         let (mut socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             match process(&mut socket, game_socket).await {
-                Err(Error::Data(err)) => println!("Client had error: {}", err),
-                Err(Error::Io(err)) => println!("Client had error: {}", err),
-                Err(Error::Message(err)) => println!("Client had error: {}", err),
+                Err(err) => println!("Client had error: {}", err),
                 Ok(()) => {
                     println!("Client disconnected.");
                     socket.shutdown().await.unwrap();

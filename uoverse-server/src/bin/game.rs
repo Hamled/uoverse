@@ -63,9 +63,7 @@ pub async fn main() {
                 let server = server.clone();
                 tokio::spawn(async move {
                     match preworld(&mut socket).await {
-                        Err(Error::Data(err)) => println!("Client had error in pre-world: {}", err),
-                        Err(Error::Io(err)) => println!("Client had error in pre-world: {}", err),
-                        Err(Error::Message(err)) => println!("Client had error in pre-world: {}", err),
+                        Err(err) => println!("Client had error in pre-world: {}", err),
                         Ok(state) => {
                             println!("Client completed pre-world.");
                             match in_world(server, state).await {
@@ -88,9 +86,7 @@ pub async fn main() {
     }
 
     match server_task.await.expect("Error joining server task") {
-        Err(Error::Message(err)) => println!("Server task had error: {}", err),
-        Err(Error::Io(err)) => println!("Server task had error: {}", err),
-        Err(Error::Data(err)) => println!("Server task had error: {}", err),
+        Err(err) => println!("Server task had error: {}", err),
         Ok(()) => {
             println!("Shutdown complete.");
         }
