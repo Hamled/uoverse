@@ -60,19 +60,19 @@ where
     fn serialize_bool(self, v: bool) -> Result<()> {
         self.size += size_of::<bool>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&[v as u8][..]).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&[v as u8][..])?;
         }
+
+        Ok(())
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
         self.size += size_of::<u8>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&[v][..]).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&[v][..])?;
         }
+
+        Ok(())
     }
 
     fn serialize_i8(self, v: i8) -> Result<()> {
@@ -82,10 +82,10 @@ where
     fn serialize_u16(self, v: u16) -> Result<()> {
         self.size += size_of::<u16>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&v.to_be_bytes()).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&v.to_be_bytes())?;
         }
+
+        Ok(())
     }
 
     fn serialize_i16(self, v: i16) -> Result<()> {
@@ -95,10 +95,10 @@ where
     fn serialize_u32(self, v: u32) -> Result<()> {
         self.size += size_of::<u32>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&v.to_be_bytes()).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&v.to_be_bytes())?;
         }
+
+        Ok(())
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
@@ -108,10 +108,10 @@ where
     fn serialize_u64(self, v: u64) -> Result<()> {
         self.size += size_of::<u64>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&v.to_be_bytes()).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&v.to_be_bytes())?;
         }
+
+        Ok(())
     }
 
     fn serialize_i64(self, v: i64) -> Result<()> {
@@ -121,28 +121,28 @@ where
     fn serialize_f32(self, v: f32) -> Result<()> {
         self.size += size_of::<f32>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&v.to_be_bytes()).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&v.to_be_bytes())?
         }
+
+        Ok(())
     }
 
     fn serialize_f64(self, v: f64) -> Result<()> {
         self.size += size_of::<f64>();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(&v.to_be_bytes()).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(&v.to_be_bytes())?;
         }
+
+        Ok(())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
         self.size += v.len();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(v).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(v)?;
         }
+
+        Ok(())
     }
 
     fn serialize_char(self, v: char) -> Result<()> {
@@ -153,13 +153,13 @@ where
             let mut buf = [0u8; 1];
             v.encode_utf8(&mut buf);
             if let Some(writer) = &mut self.writer {
-                writer.write_all(&buf).map_err(Error::io)
-            } else {
-                Ok(())
+                writer.write_all(&buf)?;
             }
         } else {
-            Err(Error::data("Unsupported string encoding"))
+            Err(Error::data("Unsupported string encoding"))?;
         }
+
+        Ok(())
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
@@ -168,7 +168,7 @@ where
             self.size += v.len();
 
             if let Some(writer) = &mut self.writer {
-                writer.write_all(v.as_bytes()).map_err(Error::io)?;
+                writer.write_all(v.as_bytes())?;
             }
 
             self.end_null()
@@ -309,10 +309,10 @@ where
     fn end_terminator(&mut self, terminator: &[u8]) -> Result<()> {
         self.size += terminator.len();
         if let Some(writer) = &mut self.writer {
-            writer.write_all(terminator).map_err(Error::io)
-        } else {
-            Ok(())
+            writer.write_all(terminator)?;
         }
+
+        Ok(())
     }
 }
 

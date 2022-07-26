@@ -26,10 +26,6 @@ impl de::Error for Error {
 }
 
 impl Error {
-    pub fn io(err: std::io::Error) -> Self {
-        Error::Io(err)
-    }
-
     pub fn data(msg: impl Into<String>) -> Self {
         Error::Data(msg.into())
     }

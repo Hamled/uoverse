@@ -54,7 +54,7 @@ macro_rules! impl_read_literal {
                     })
                 }
             } else {
-                let val = self.reader.$read_func::<BigEndian>().map_err(Error::io)?;
+                let val = self.reader.$read_func::<BigEndian>()?;
                 self.track_read(::core::mem::size_of::<$ty>())?;
 
                 Ok(val)
@@ -77,10 +77,11 @@ where
     impl_read_literal!(read_f64: f64 = read_f64());
 
     fn insufficient_buffer<T>() -> Error {
-        Error::io(io::Error::new(
+        io::Error::new(
             io::ErrorKind::UnexpectedEof,
             format!("insufficient buffer for {}", std::any::type_name::<T>()),
-        ))
+        )
+        .into()
     }
 
     fn track_read(&mut self, amount: usize) -> Result<()> {
@@ -110,7 +111,7 @@ where
             }
             buf[0]
         } else {
-            let val = self.reader.read_u8().map_err(Error::io)?;
+            let val = self.reader.read_u8()?;
             self.track_read(core::mem::size_of::<bool>())?;
             val
         };
@@ -129,7 +130,7 @@ where
             }
             buf[0]
         } else {
-            let val = self.reader.read_u8().map_err(Error::io)?;
+            let val = self.reader.read_u8()?;
             self.track_read(core::mem::size_of::<u8>())?;
             val
         };
@@ -148,7 +149,7 @@ where
             }
             buf[0] as i8
         } else {
-            let val = self.reader.read_i8().map_err(Error::io)?;
+            let val = self.reader.read_i8()?;
             self.track_read(core::mem::size_of::<i8>())?;
             val
         };
@@ -237,7 +238,7 @@ where
         // TODO: Make a zero-copy version of this if possible
         let mut buffer = vec![];
         loop {
-            let byte = self.reader.read_u8().map_err(Error::io)?;
+            let byte = self.reader.read_u8()?;
             match byte {
                 0 => break,
                 n => buffer.push(n),
@@ -265,7 +266,7 @@ where
 
         let mut buffer = vec![];
         loop {
-            let byte = self.reader.read_u8().map_err(Error::io)?;
+            let byte = self.reader.read_u8()?;
             match byte {
                 0 => break,
                 n => buffer.push(n),
