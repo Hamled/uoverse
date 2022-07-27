@@ -5,6 +5,8 @@ authors = ["Charles Ellis <hamled@hamled.dev>"]
 edition = "2018"
 
 [dependencies]
+byteorder = "1.4.2"
+thiserror = "1.0"
 
 [[bin]]
 name = "mapgen"
