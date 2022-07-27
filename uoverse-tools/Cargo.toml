@@ -1,0 +1,10 @@
+[package]
+name = "uoverse-tools"
+version = "0.1.0"
+authors = ["Charles Ellis <hamled@hamled.dev>"]
+edition = "2018"
+
+[dependencies]
+
+[[bin]]
+name = "mapgen"
