@@ -224,6 +224,11 @@ impl UOPackage {
         Ok(package)
     }
 
+    pub fn get_file<'a>(&'a self, path: &str) -> Result<Option<&'a UOPackageFile>> {
+        let hash = uop_hash(path)?;
+        Ok(self.files.iter().find(|f| f.hash == hash))
+    }
+
     fn read_files<R: Read + Seek>(&mut self, reader: &mut R) -> Result<()> {
         // Read all of the block headers
         let mut block_pos = self.header.first_block;
