@@ -10,6 +10,10 @@ use std::{
 pub enum Error {
     #[error("package header magic ({0:?}) is invalid")]
     InvalidMagic([u8; 4]),
+
+    #[error("package version {0} is not supported")]
+    UnsupportedVersion(u32),
+
     #[error("i/o failure {0}")]
     Io(#[from] std::io::Error),
 }
@@ -106,7 +110,7 @@ pub struct UOPackageFile {
 }
 
 impl UOPackageFile {
-    fn new<R: Read>(reader: &mut R, header: &FileHdr) -> Result<Self> {
+    fn read_version4<R: Read>(reader: &mut R, header: &FileHdr) -> Result<Self> {
         let mut file = UOPackageFile {
             hash: header.hash,
             file_type: reader.read_u16::<LittleEndian>()?,
@@ -115,24 +119,64 @@ impl UOPackageFile {
             contents: Vec::with_capacity(header.raw_size as usize),
         };
 
-        // Read in the file data
+        assert!(file.header_remaining as usize == std::mem::size_of::<u64>());
+
+        Self::read_contents(reader, header, &mut file.contents)?;
+        Ok(file)
+    }
+
+    fn read_version5<R: Read>(reader: &mut R, header: &FileHdr) -> Result<Self> {
+        // Header is unknown, read it and ignore
+        // TODO: Verify header CRC
+        let reader = {
+            let mut buf = Vec::<u8>::with_capacity(header.header_size as usize);
+            let mut reader = reader.take(header.header_size.into());
+            reader.read_to_end(&mut buf)?;
+            reader.into_inner()
+        };
+
+        let mut file = UOPackageFile {
+            hash: header.hash,
+            file_type: 0,
+            header_remaining: 0,
+            timestamp: 0,
+            contents: Vec::with_capacity(header.raw_size as usize),
+        };
+
+        Self::read_contents(reader, header, &mut file.contents)?;
+        Ok(file)
+    }
+
+    fn read_contents<R: Read>(
+        reader: &mut R,
+        header: &FileHdr,
+        contents: &mut Vec<u8>,
+    ) -> Result<()> {
         match header.entry_type {
             0 => {
                 let mut reader = reader.take(header.raw_size.into());
-                let amount = reader.read_to_end(&mut file.contents)?;
+                let amount = reader.read_to_end(contents)?;
                 assert!(amount == header.raw_size as usize);
             }
             1 => {
                 let reader = reader.take(header.compressed_size.into());
                 let mut decoder = ZlibDecoder::new(reader);
-                decoder.read_to_end(&mut file.contents)?;
+                decoder.read_to_end(contents)?;
                 assert!(decoder.total_in() == header.compressed_size.into());
                 assert!(decoder.total_out() == header.raw_size.into());
             }
             _ => unimplemented!(),
         }
 
-        Ok(file)
+        Ok(())
+    }
+
+    fn new<R: Read>(reader: &mut R, header: &FileHdr, version: u32) -> Result<Self> {
+        match version {
+            4 => Self::read_version4(reader, header),
+            5 => Self::read_version5(reader, header),
+            _ => Err(Error::UnsupportedVersion(version)),
+        }
     }
 }
 
@@ -156,6 +200,11 @@ impl UOPackage {
     pub fn new<R: Read + Seek>(reader: &mut R) -> Result<Self> {
         let header = PackageHdr::new(reader)?;
 
+        match header.version {
+            4 | 5 => {}
+            _ => return Err(Error::UnsupportedVersion(header.version)),
+        }
+
         let mut package = UOPackage {
             header,
             files: vec![],
@@ -172,8 +221,13 @@ impl UOPackage {
             reader.seek(SeekFrom::Start(block_pos))?;
             let block = BlockHdr::new(reader)?;
             for header in block.headers {
+                if header.position == 0 {
+                    continue;
+                }
+
                 reader.seek(SeekFrom::Start(header.position))?;
-                self.files.push(UOPackageFile::new(reader, &header)?);
+                self.files
+                    .push(UOPackageFile::new(reader, &header, self.header.version)?);
             }
 
             block_pos = block.next_block;
