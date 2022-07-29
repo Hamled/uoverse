@@ -1,6 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 use std::{
+    convert::TryInto,
     fmt,
     io::{Read, Seek, SeekFrom},
 };
@@ -13,6 +14,15 @@ pub enum Error {
 
     #[error("package version {0} is not supported")]
     UnsupportedVersion(u32),
+
+    #[error("hash input encoding is not supported")]
+    UnsupportedEncoding,
+
+    #[error("hash input is too large ({0} bytes)")]
+    InputTooLarge(usize),
+
+    #[error("hash input is too small")]
+    InputTooSmall,
 
     #[error("i/o failure {0}")]
     Io(#[from] std::io::Error),
@@ -234,5 +244,95 @@ impl UOPackage {
         }
 
         Ok(())
+    }
+}
+
+// UOP file name hash algorithm adapted from
+// https://github.com/ClassicUO/ClassicUO/blob/69857dc07b5d84ecf0e404df3fe3c8514df3a4c7/src/IO/UOFileUop.cs#L198
+fn uop_hash(input: &str) -> Result<u64> {
+    const HASH_MAGIC: u32 = 0xDEADBEEF;
+    const PART_SIZE: usize = std::mem::size_of::<u32>();
+    struct Chunk<'a>(&'a [u8], &'a [u8], &'a [u8]);
+
+    if input.is_empty() {
+        return Err(Error::InputTooSmall);
+    }
+
+    if !input.is_ascii() {
+        return Err(Error::UnsupportedEncoding);
+    }
+
+    let mut input = input.as_bytes();
+    let init: u32 = HASH_MAGIC.wrapping_add(
+        input
+            .len()
+            .try_into()
+            .map_err(|_| Error::InputTooLarge(input.len()))?,
+    );
+    let (mut a, mut b, mut c): (u32, u32, u32) = (init, init, init);
+
+    while input.len() > PART_SIZE * 3 {
+        let mut chunk = Chunk(
+            &input[(PART_SIZE * 0)..(PART_SIZE * 1)],
+            &input[(PART_SIZE * 1)..(PART_SIZE * 2)],
+            &input[(PART_SIZE * 2)..(PART_SIZE * 3)],
+        );
+
+        let mut d = chunk.0.read_u32::<LittleEndian>()?;
+        a = a.wrapping_add(chunk.1.read_u32::<LittleEndian>()?);
+        b = b.wrapping_add(chunk.2.read_u32::<LittleEndian>()?);
+        d = d.wrapping_sub(b);
+
+        d = d.wrapping_add(c) ^ (b >> 28) ^ (b << 4);
+        b = b.wrapping_add(a);
+        a = a.wrapping_sub(d) ^ (d >> 26) ^ (d << 6);
+        d = d.wrapping_add(b);
+        b = b.wrapping_sub(a) ^ (a >> 24) ^ (a << 8);
+        a = a.wrapping_add(d);
+        c = d.wrapping_sub(b) ^ (b >> 16) ^ (b << 16);
+        b = b.wrapping_add(a);
+        a = a.wrapping_sub(c) ^ (c >> 13) ^ (c << 19);
+        c = c.wrapping_add(b);
+        b = b.wrapping_sub(a) ^ (a >> 28) ^ (a << 4);
+        a = a.wrapping_add(c);
+
+        // Move to the next chunk
+        input = &input[(PART_SIZE * 3)..];
+    }
+
+    let mut rest = [0u8; PART_SIZE * 3];
+    rest[0..input.len()].copy_from_slice(input);
+    let mut chunk = Chunk(
+        &rest[(PART_SIZE * 0)..(PART_SIZE * 1)],
+        &rest[(PART_SIZE * 1)..(PART_SIZE * 2)],
+        &rest[(PART_SIZE * 2)..(PART_SIZE * 3)],
+    );
+
+    c = c.wrapping_add(chunk.0.read_u32::<LittleEndian>()?);
+    a = a.wrapping_add(chunk.1.read_u32::<LittleEndian>()?);
+    b = b.wrapping_add(chunk.2.read_u32::<LittleEndian>()?);
+
+    let mut d;
+    b = (b ^ a).wrapping_sub((a >> 18) ^ (a << 14));
+    d = (b ^ c).wrapping_sub((b >> 21) ^ (b << 11));
+    a = (a ^ d).wrapping_sub((d >> 7) ^ (d << 25));
+    b = (b ^ a).wrapping_sub((a >> 16) ^ (a << 16));
+    d = (b ^ d).wrapping_sub((b >> 28) ^ (b << 4));
+    a = (a ^ d).wrapping_sub((d >> 18) ^ (d << 14));
+    b = (b ^ a).wrapping_sub((a >> 8) ^ (a << 24));
+
+    Ok(((a as u64) << 32) | b as u64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hashes_map_paths() {
+        let input = "build/map4legacymul/00000000.dat";
+        let output = uop_hash(input).unwrap();
+
+        assert_eq!(output, 0xDEA39C8655BA717C);
     }
 }
