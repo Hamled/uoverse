@@ -1,5 +1,10 @@
 use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Read;
+use std::{
+    convert::{TryFrom, TryInto},
+    io::{Cursor, Read},
+};
+
+use crate::archive::uo_package::{self, UOPackage, UOPackageFile};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -8,6 +13,12 @@ pub enum Error {
 
     #[error("map position ({x},{y}) is invalid")]
     InvalidPos { x: u32, y: u32 },
+
+    #[error("map file in package is invalid because {0}")]
+    InvalidFile(#[from] uo_package::Error),
+
+    #[error("no map files in package")]
+    NoFiles,
 
     #[error("i/o failure {0}")]
     Io(#[from] std::io::Error),
@@ -151,5 +162,84 @@ where
     }
 }
 
+pub struct Metadata {
+    pub width: u32,
+    pub height: u32,
+    pub prefix: String,
+}
+
+impl<const BLOCK_SIZE: u32> TryFrom<(Metadata, UOPackage)> for Map<BLOCK_SIZE>
+where
+    [(); BLOCK_SIZE as usize]:,
+{
+    type Error = Error;
+
+    fn try_from((metadata, package): (Metadata, UOPackage)) -> Result<Self> {
+        let mut reader: PackageReader<'_> = (metadata.prefix.as_str(), &package).try_into()?;
+        Ok(Self::from_reader(
+            &mut reader,
+            metadata.width,
+            metadata.height,
+        )?)
+    }
+}
+
 // UO maps use 8x8 blocks
 pub type UOMap = Map<8>;
+
+struct PackageReader<'a> {
+    package: &'a UOPackage,
+    prefix: String,
+    file_num: u32,
+    inner: Cursor<&'a [u8]>,
+}
+
+impl<'a> PackageReader<'a> {
+    fn file_path(prefix: &str, file_num: u32) -> String {
+        format!("{}/{:08}.dat", prefix, file_num)
+    }
+
+    fn get_file(&self, file_num: u32) -> Result<Option<&'a UOPackageFile>> {
+        Ok(self
+            .package
+            .get_file(&Self::file_path(self.prefix.as_str(), file_num).as_str())?)
+    }
+}
+
+impl<'a, 'b> TryFrom<(&'b str, &'a UOPackage)> for PackageReader<'a> {
+    type Error = Error;
+
+    fn try_from((prefix, package): (&'b str, &'a UOPackage)) -> Result<Self> {
+        let file_num = 0;
+
+        match package.get_file(Self::file_path(prefix, file_num).as_str())? {
+            Some(file) => Ok(Self {
+                package,
+                prefix: prefix.to_string(),
+                file_num,
+                inner: Cursor::new(&file.contents),
+            }),
+            None => Err(Error::NoFiles),
+        }
+    }
+}
+
+impl<'a> Read for PackageReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let mut amount = self.inner.read(buf)?;
+
+        if amount == 0 {
+            if let Some(file) = self
+                .get_file(self.file_num + 1)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+            {
+                self.inner = Cursor::new(&file.contents);
+                self.file_num += 1;
+
+                amount = self.inner.read(buf)?;
+            }
+        }
+
+        Ok(amount)
+    }
+}
