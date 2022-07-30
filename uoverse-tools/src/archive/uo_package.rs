@@ -12,6 +12,9 @@ pub enum Error {
     #[error("package header magic ({0:?}) is invalid")]
     InvalidMagic([u8; 4]),
 
+    #[error("package data is invalid because {0}")]
+    InvalidData(String),
+
     #[error("package version {0} is not supported")]
     UnsupportedVersion(u32),
 
@@ -130,42 +133,50 @@ impl From<u16> for FileType {
 pub struct UOPackageFile {
     pub hash: u64,
     pub file_type: FileType,
-    header_remaining: u16,
-    timestamp: u64,
+    pub timestamp: Option<u64>,
     pub contents: Vec<u8>,
 }
 
 impl UOPackageFile {
-    fn read_version4<R: Read>(reader: &mut R, header: &FileHdr) -> Result<Self> {
+    fn read_version4<R: Read + Seek>(reader: &mut R, header: &FileHdr) -> Result<Self> {
+        let file_type = reader.read_u16::<LittleEndian>()?.into();
+        let remaining = reader.read_u16::<LittleEndian>()?;
+        let timestamp = Some(reader.read_u64::<LittleEndian>()?);
+
+        // Skip rest of header
+        let remaining = (remaining as usize).checked_sub(std::mem::size_of::<u64>());
+        if remaining.is_none() {
+            return Err(Error::InvalidData(format!(
+                "metadata for file {:016X} is invalid",
+                header.hash
+            )));
+        }
+        reader.seek(SeekFrom::Current(remaining.unwrap() as i64))?;
+
+        // TODO: Verify header CRC
         let mut file = UOPackageFile {
             hash: header.hash,
-            file_type: reader.read_u16::<LittleEndian>()?.into(),
-            header_remaining: reader.read_u16::<LittleEndian>()?,
-            timestamp: reader.read_u64::<LittleEndian>()?,
+            file_type,
+            timestamp,
             contents: Vec::with_capacity(header.raw_size as usize),
         };
-
-        assert!(file.header_remaining as usize == std::mem::size_of::<u64>());
 
         Self::read_contents(reader, header, &mut file.contents)?;
         Ok(file)
     }
 
-    fn read_version5<R: Read>(reader: &mut R, header: &FileHdr) -> Result<Self> {
-        // Header is unknown, read it and ignore
-        // TODO: Verify header CRC
-        let reader = {
-            let mut buf = Vec::<u8>::with_capacity(header.header_size as usize);
-            let mut reader = reader.take(header.header_size.into());
-            reader.read_to_end(&mut buf)?;
-            reader.into_inner()
-        };
+    fn read_version5<R: Read + Seek>(reader: &mut R, header: &FileHdr) -> Result<Self> {
+        let file_type = reader.read_u16::<LittleEndian>()?.into();
+        let remaining = reader.read_u16::<LittleEndian>()?;
 
+        // Rest of header is unknown, skip it
+        reader.seek(SeekFrom::Current(remaining as i64))?;
+
+        // TODO: Verify header CRC
         let mut file = UOPackageFile {
             hash: header.hash,
-            file_type: FileType::Unknown,
-            header_remaining: 0,
-            timestamp: 0,
+            file_type,
+            timestamp: None,
             contents: Vec::with_capacity(header.raw_size as usize),
         };
 
@@ -197,7 +208,7 @@ impl UOPackageFile {
         Ok(())
     }
 
-    fn new<R: Read>(reader: &mut R, header: &FileHdr, version: u32) -> Result<Self> {
+    fn new<R: Read + Seek>(reader: &mut R, header: &FileHdr, version: u32) -> Result<Self> {
         match version {
             4 => Self::read_version4(reader, header),
             5 => Self::read_version5(reader, header),
