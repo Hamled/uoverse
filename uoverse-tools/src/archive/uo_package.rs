@@ -111,9 +111,25 @@ impl FileHdr {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+#[repr(u16)]
+pub enum FileType {
+    MapTiles = 4,
+    Unknown = 0xFFFF,
+}
+
+impl From<u16> for FileType {
+    fn from(val: u16) -> Self {
+        match val {
+            4 => Self::MapTiles,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 pub struct UOPackageFile {
     pub hash: u64,
-    file_type: u16,
+    pub file_type: FileType,
     header_remaining: u16,
     timestamp: u64,
     pub contents: Vec<u8>,
@@ -123,7 +139,7 @@ impl UOPackageFile {
     fn read_version4<R: Read>(reader: &mut R, header: &FileHdr) -> Result<Self> {
         let mut file = UOPackageFile {
             hash: header.hash,
-            file_type: reader.read_u16::<LittleEndian>()?,
+            file_type: reader.read_u16::<LittleEndian>()?.into(),
             header_remaining: reader.read_u16::<LittleEndian>()?,
             timestamp: reader.read_u64::<LittleEndian>()?,
             contents: Vec::with_capacity(header.raw_size as usize),
@@ -147,7 +163,7 @@ impl UOPackageFile {
 
         let mut file = UOPackageFile {
             hash: header.hash,
-            file_type: 0,
+            file_type: FileType::Unknown,
             header_remaining: 0,
             timestamp: 0,
             contents: Vec::with_capacity(header.raw_size as usize),
@@ -193,8 +209,9 @@ impl UOPackageFile {
 impl fmt::Debug for UOPackageFile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "File(hash: {:016X}, length: {})",
+            "File(hash: {:016X}, type: {:?}, length: {})",
             self.hash,
+            self.file_type,
             self.contents.len()
         ))
     }
