@@ -91,7 +91,7 @@ impl Default for PackageHdr {
 
 #[derive(Debug)]
 struct BlockHdr {
-    _files_count: u32,
+    files_count: u32,
     next_block: u64,
     headers: Vec<FileHdr>,
 }
@@ -107,10 +107,21 @@ impl BlockHdr {
         }
 
         Ok(BlockHdr {
-            _files_count: files_count,
+            files_count,
             next_block,
             headers,
         })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u32::<LittleEndian>(self.files_count)?;
+        writer.write_u64::<LittleEndian>(self.next_block)?;
+
+        for header in &self.headers {
+            header.write(writer)?;
+        }
+
+        Ok(())
     }
 }
 
