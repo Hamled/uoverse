@@ -170,6 +170,15 @@ pub enum FileType {
     Unknown = 0xFFFF,
 }
 
+impl FileType {
+    fn is_compressed(&self) -> bool {
+        match self {
+            Self::Compressed => true,
+            _ => false,
+        }
+    }
+}
+
 impl From<u16> for FileType {
     fn from(val: u16) -> Self {
         match val {
