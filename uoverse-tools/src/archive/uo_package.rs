@@ -117,7 +117,7 @@ impl BlockHdr {
 #[derive(Debug)]
 struct FileHdr {
     position: u64,
-    _header_size: u32,
+    header_size: u32,
     compressed_size: u32,
     raw_size: u32,
     hash: u64,
@@ -129,13 +129,25 @@ impl FileHdr {
     fn new<R: Read>(reader: &mut R) -> Result<Self> {
         Ok(FileHdr {
             position: reader.read_u64::<LittleEndian>()?,
-            _header_size: reader.read_u32::<LittleEndian>()?,
+            header_size: reader.read_u32::<LittleEndian>()?,
             compressed_size: reader.read_u32::<LittleEndian>()?,
             raw_size: reader.read_u32::<LittleEndian>()?,
             hash: reader.read_u64::<LittleEndian>()?,
             _header_crc: reader.read_u32::<LittleEndian>()?,
             entry_type: reader.read_u16::<LittleEndian>()?,
         })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u64::<LittleEndian>(self.position)?;
+        writer.write_u32::<LittleEndian>(self.header_size)?;
+        writer.write_u32::<LittleEndian>(self.compressed_size)?;
+        writer.write_u32::<LittleEndian>(self.raw_size)?;
+        writer.write_u64::<LittleEndian>(self.hash)?;
+        writer.write_u32::<LittleEndian>(self._header_crc)?;
+        writer.write_u16::<LittleEndian>(self.entry_type)?;
+
+        Ok(())
     }
 }
 
