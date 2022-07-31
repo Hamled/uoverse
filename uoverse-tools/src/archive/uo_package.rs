@@ -117,6 +117,7 @@ impl FileHdr {
 #[derive(Copy, Clone, Debug)]
 #[repr(u16)]
 pub enum FileType {
+    Compressed = 3,
     MapTiles = 4,
     Unknown = 0xFFFF,
 }
@@ -124,6 +125,7 @@ pub enum FileType {
 impl From<u16> for FileType {
     fn from(val: u16) -> Self {
         match val {
+            3 => Self::Compressed,
             4 => Self::MapTiles,
             _ => Self::Unknown,
         }
