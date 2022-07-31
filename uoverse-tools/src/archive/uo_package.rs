@@ -37,6 +37,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 const HEADER_MAGIC: [u8; 4] = [0x4D, 0x59, 0x50, 0x00];
 const FORMAT_MAGIC: u32 = 0xFD23EC43;
 
+// When writing, align block headers & file entries on 4K page boundaries
+const ALIGNMENT: u64 = 0x1000;
+
 #[derive(Debug)]
 pub struct PackageHdr {
     version: u32,
@@ -114,6 +117,10 @@ impl BlockHdr {
         })
     }
 
+    fn size(num_headers: u32) -> usize {
+        size_of::<u32>() + size_of::<u64>() + (FileHdr::SIZE * num_headers as usize)
+    }
+
     fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u32::<LittleEndian>(self.files_count)?;
         writer.write_u64::<LittleEndian>(self.next_block)?;
@@ -138,6 +145,8 @@ struct FileHdr {
 }
 
 impl FileHdr {
+    const SIZE: usize = (size_of::<u64>() * 2) + (size_of::<u32>() * 4) + size_of::<u16>();
+
     fn new<R: Read>(reader: &mut R) -> Result<Self> {
         Ok(FileHdr {
             position: reader.read_u64::<LittleEndian>()?,
@@ -369,6 +378,8 @@ pub struct UOPackage {
 }
 
 impl UOPackage {
+    const WRITE_VERSION: u32 = 5;
+
     pub fn new<R: Read + Seek>(reader: &mut R) -> Result<Self> {
         let header = PackageHdr::new(reader)?;
 
@@ -384,6 +395,85 @@ impl UOPackage {
 
         package.read_files(reader)?;
         Ok(package)
+    }
+
+    pub fn write<W: Write + Seek>(&self, writer: &mut W) -> Result<()> {
+        assert!(BlockHdr::size(self.header.block_size) <= ALIGNMENT as usize);
+
+        // Write the package header
+        writer.seek(SeekFrom::Start(0))?;
+        self.header.write(writer)?;
+
+        // Calculate position of first file entry
+        let block_size = self.header.block_size as usize;
+        let num_blocks = (self.files.len() + block_size - 1) / block_size;
+        let entries_pos = num_blocks as u64 * ALIGNMENT;
+
+        // Write blocks with entries for all files
+        let mut block_pos = self.header.first_block;
+        let mut file_pos = entries_pos;
+        let mut file_blocks = self.files.chunks_exact(block_size);
+        for files in file_blocks.by_ref() {
+            // Round up to next alignment for the block header
+            let next_block = ((block_pos / ALIGNMENT) + 1) * ALIGNMENT;
+
+            self.write_block(writer, files, block_pos, Some(next_block), &mut file_pos)?;
+
+            block_pos = next_block;
+        }
+
+        let remainder = file_blocks.remainder();
+        if !remainder.is_empty() {
+            self.write_block(writer, remainder, block_pos, None, &mut file_pos)?;
+        }
+
+        Ok(())
+    }
+
+    fn write_block<W: Write + Seek>(
+        &self,
+        writer: &mut W,
+        files: &[UOPackageFile],
+        block_pos: u64,
+        next_block: Option<u64>,
+        file_pos: &mut u64,
+    ) -> Result<()> {
+        let mut headers = Vec::<FileHdr>::with_capacity(files.len());
+        for file in files {
+            writer.seek(SeekFrom::Start(*file_pos))?;
+            let (compressed_size, raw_size) = file.write(writer, Self::WRITE_VERSION)?;
+
+            let header_size = match Self::WRITE_VERSION {
+                4 => Ok(UOPackageFile::HEADER_SIZE_V4),
+                5 => Ok(UOPackageFile::HEADER_SIZE_V5),
+                version => Err(Error::UnsupportedVersion(version)),
+            }? as u32;
+
+            headers.push(FileHdr {
+                position: *file_pos,
+                header_size,
+                compressed_size,
+                raw_size,
+                hash: file.hash,
+                _header_crc: 0,
+                entry_type: file.file_type.is_compressed() as u16,
+            });
+
+            // Round up to next alignment after the written contents
+            let file_pages = ((compressed_size + header_size) as u64 + ALIGNMENT - 1) / ALIGNMENT;
+            *file_pos += file_pages * ALIGNMENT;
+        }
+
+        // Write the block header for the files just written
+        writer.seek(SeekFrom::Start(block_pos))?;
+
+        let header = BlockHdr {
+            files_count: files.len() as u32,
+            next_block: next_block.unwrap_or(0),
+            headers,
+        };
+
+        header.write(writer)
     }
 
     pub fn get_file<'a>(&'a self, path: &str) -> Result<Option<&'a UOPackageFile>> {
