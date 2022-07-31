@@ -525,7 +525,7 @@ impl TryFrom<Vec<UOPackageFile>> for UOPackage {
 // https://github.com/ClassicUO/ClassicUO/blob/69857dc07b5d84ecf0e404df3fe3c8514df3a4c7/src/IO/UOFileUop.cs#L198
 // which turns out to just be lookup3 from Bob Jenkins:
 // http://www.burtleburtle.net/bob/hash/doobs.html
-fn uop_hash(input: &str) -> Result<u64> {
+pub fn uop_hash(input: &str) -> Result<u64> {
     if input.is_empty() {
         return Err(Error::InputTooSmall);
     }
