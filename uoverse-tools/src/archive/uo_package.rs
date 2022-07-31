@@ -1,9 +1,9 @@
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use flate2::read::ZlibDecoder;
 use std::{
     convert::TryInto,
     fmt,
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom, Write},
 };
 
 #[non_exhaustive]
@@ -34,18 +34,19 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 const HEADER_MAGIC: [u8; 4] = [0x4D, 0x59, 0x50, 0x00];
+const FORMAT_MAGIC: u32 = 0xFD23EC43;
 
 #[derive(Debug)]
 pub struct PackageHdr {
     version: u32,
-    _format: u32,
+    format: u32,
     first_block: u64,
-    _block_size: u32,
-    _files_count: u32,
+    block_size: u32,
+    files_count: u32,
 }
 
 impl PackageHdr {
-    fn new<R: Read + Seek>(reader: &mut R) -> Result<Self> {
+    fn new<R: Read>(reader: &mut R) -> Result<Self> {
         // Verify
         let mut header = [0u8; 4];
         reader.read_exact(header.as_mut_slice())?;
@@ -56,11 +57,35 @@ impl PackageHdr {
 
         Ok(PackageHdr {
             version: reader.read_u32::<LittleEndian>()?,
-            _format: reader.read_u32::<LittleEndian>()?,
+            format: reader.read_u32::<LittleEndian>()?,
             first_block: reader.read_u64::<LittleEndian>()?,
-            _block_size: reader.read_u32::<LittleEndian>()?,
-            _files_count: reader.read_u32::<LittleEndian>()?,
+            block_size: reader.read_u32::<LittleEndian>()?,
+            files_count: reader.read_u32::<LittleEndian>()?,
         })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_all(&HEADER_MAGIC)?;
+
+        writer.write_u32::<LittleEndian>(self.version)?;
+        writer.write_u32::<LittleEndian>(self.format)?;
+        writer.write_u64::<LittleEndian>(self.first_block)?;
+        writer.write_u32::<LittleEndian>(self.block_size)?;
+        writer.write_u32::<LittleEndian>(self.files_count)?;
+
+        Ok(())
+    }
+}
+
+impl Default for PackageHdr {
+    fn default() -> Self {
+        Self {
+            version: 5,
+            format: FORMAT_MAGIC,
+            first_block: 0x200,
+            block_size: 100, // Can fit at most 119 file headers per 4K page
+            files_count: 0,
+        }
     }
 }
 
