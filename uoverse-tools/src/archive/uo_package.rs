@@ -1,9 +1,10 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use flate2::read::ZlibDecoder;
+use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 use std::{
     convert::TryInto,
     fmt,
     io::{Read, Seek, SeekFrom, Write},
+    mem::size_of,
 };
 
 #[non_exhaustive]
@@ -197,13 +198,14 @@ pub struct UOPackageFile {
 }
 
 impl UOPackageFile {
+    const HEADER_SIZE_V4: usize = 12;
     fn read_version4<R: Read + Seek>(reader: &mut R, header: &FileHdr) -> Result<Self> {
         let file_type = reader.read_u16::<LittleEndian>()?.into();
         let remaining = reader.read_u16::<LittleEndian>()?;
         let timestamp = Some(reader.read_u64::<LittleEndian>()?);
 
         // Skip rest of header
-        let remaining = (remaining as usize).checked_sub(std::mem::size_of::<u64>());
+        let remaining = (remaining as usize).checked_sub(size_of::<u64>());
         if remaining.is_none() {
             return Err(Error::InvalidData(format!(
                 "metadata for file {:016X} is invalid",
@@ -224,6 +226,7 @@ impl UOPackageFile {
         Ok(file)
     }
 
+    const HEADER_SIZE_V5: usize = 137; // What the UOLive files have
     fn read_version5<R: Read + Seek>(reader: &mut R, header: &FileHdr) -> Result<Self> {
         let file_type = reader.read_u16::<LittleEndian>()?.into();
         let remaining = reader.read_u16::<LittleEndian>()?;
@@ -272,6 +275,78 @@ impl UOPackageFile {
             4 => Self::read_version4(reader, header),
             5 => Self::read_version5(reader, header),
             _ => Err(Error::UnsupportedVersion(version)),
+        }
+    }
+
+    fn write_header_v4<W: Write + Seek>(&self, writer: &mut W) -> Result<usize> {
+        let preamble_size = size_of::<u16>() * 2; // file_type and remaining
+        let remaining =
+            Self::HEADER_SIZE_V4
+                .checked_sub(preamble_size)
+                .ok_or(Error::InvalidData(format!(
+                    "metadata for file {:016X} is larger than expected",
+                    self.hash
+                )))?;
+
+        writer.write_u16::<LittleEndian>(self.file_type as u16)?;
+        writer.write_u16::<LittleEndian>(remaining as u16)?;
+
+        writer.write_u64::<LittleEndian>(self.timestamp.unwrap_or(0))?;
+        Ok(remaining
+            .checked_sub(size_of::<u64>()) // Already wrote timestamp
+            .ok_or(Error::InvalidData(format!(
+                "metadata for file {:016X} is larger than expected",
+                self.hash
+            )))?)
+    }
+
+    fn write_header_v5<W: Write + Seek>(&self, writer: &mut W) -> Result<usize> {
+        let preamble_size = size_of::<u16>() * 2; // file_type and remaining
+        let remaining =
+            Self::HEADER_SIZE_V5
+                .checked_sub(preamble_size)
+                .ok_or(Error::InvalidData(format!(
+                    "metadata for file {:016X} is larger than expected",
+                    self.hash
+                )))?;
+
+        writer.write_u16::<LittleEndian>(self.file_type as u16)?;
+        writer.write_u16::<LittleEndian>(remaining as u16)?;
+
+        Ok(remaining)
+    }
+
+    fn write_header<W: Write + Seek>(&self, writer: &mut W, version: u32) -> Result<usize> {
+        match version {
+            4 => self.write_header_v4(writer),
+            5 => self.write_header_v5(writer),
+            _ => Err(Error::UnsupportedVersion(version)),
+        }
+    }
+
+    fn write<W: Write + Seek>(&self, writer: &mut W, version: u32) -> Result<(u32, u32)> {
+        // Write the file metadata first
+        let remaining = self.write_header(writer, version)?;
+
+        // Write the file content
+        writer.seek(SeekFrom::Current(remaining as i64))?;
+
+        match self.file_type.is_compressed() {
+            true => {
+                let mut encoder = ZlibEncoder::new(writer, Compression::best());
+                encoder.write_all(self.contents.as_slice())?;
+                encoder.try_finish()?;
+
+                let compressed_size = encoder.total_out() as u32;
+                let raw_size = encoder.total_in() as u32;
+                Ok((compressed_size, raw_size))
+            }
+            false => {
+                writer.write_all(self.contents.as_slice())?;
+
+                let file_size = self.contents.len() as u32;
+                Ok((file_size, file_size))
+            }
         }
     }
 }
