@@ -1,7 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 use std::{
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     fmt,
     io::{Read, Seek, SeekFrom, Write},
     mem::size_of,
@@ -18,6 +18,9 @@ pub enum Error {
 
     #[error("package version {0} is not supported")]
     UnsupportedVersion(u32),
+
+    #[error("package cannot contain {0} files")]
+    TooManyFiles(usize),
 
     #[error("hash input encoding is not supported")]
     UnsupportedEncoding,
@@ -501,6 +504,20 @@ impl UOPackage {
         }
 
         Ok(())
+    }
+}
+
+impl TryFrom<Vec<UOPackageFile>> for UOPackage {
+    type Error = Error;
+
+    fn try_from(files: Vec<UOPackageFile>) -> Result<Self> {
+        let mut header: PackageHdr = Default::default();
+        header.files_count = files
+            .len()
+            .try_into()
+            .map_err(|_| Error::TooManyFiles(files.len()))?;
+
+        Ok(Self { header, files })
     }
 }
 
