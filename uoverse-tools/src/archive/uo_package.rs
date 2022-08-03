@@ -89,8 +89,8 @@ impl Default for PackageHdr {
         Self {
             version: 5,
             format: FORMAT_MAGIC,
-            first_block: 0x200,
-            block_size: 100, // Can fit at most 119 file headers per 4K page
+            first_block: 0x20,
+            block_size: ((ALIGNMENT as usize - BlockHdr::BASE_SIZE) / FileHdr::SIZE) as u32,
             files_count: 0,
         }
     }
@@ -104,6 +104,8 @@ struct BlockHdr {
 }
 
 impl BlockHdr {
+    const BASE_SIZE: usize = size_of::<u32>() + size_of::<u64>();
+
     fn new<R: Read + Seek>(reader: &mut R) -> Result<Self> {
         let files_count = reader.read_u32::<LittleEndian>()?;
         let next_block = reader.read_u64::<LittleEndian>()?;
@@ -121,7 +123,7 @@ impl BlockHdr {
     }
 
     fn size(num_headers: u32) -> usize {
-        size_of::<u32>() + size_of::<u64>() + (FileHdr::SIZE * num_headers as usize)
+        Self::BASE_SIZE + (FileHdr::SIZE * num_headers as usize)
     }
 
     fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
@@ -238,7 +240,7 @@ impl UOPackageFile {
         Ok(file)
     }
 
-    const HEADER_SIZE_V5: usize = 137; // What the UOLive files have
+    const HEADER_SIZE_V5: usize = 8; // UOLive files have 137, but we only use the file type field
     fn read_version5<R: Read + Seek>(reader: &mut R, header: &FileHdr) -> Result<Self> {
         let file_type = reader.read_u16::<LittleEndian>()?.into();
         let remaining = reader.read_u16::<LittleEndian>()?;
