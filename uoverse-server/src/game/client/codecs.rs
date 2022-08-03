@@ -44,6 +44,7 @@ define_codec! {
         char_login::LoginConfirmation,
         char_login::CharStatus,
         char_login::LoginComplete,
+        map::MapChange,
     ],
     recv []
 }

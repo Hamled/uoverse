@@ -6,7 +6,7 @@ use std::{
     },
 };
 use tokio::sync::mpsc;
-use tracing::{debug, info, trace_span, trace};
+use tracing::{debug, info, trace, trace_span};
 use ultimaonline_net::{
     error::{Error, Result},
     packets::movement,
