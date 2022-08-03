@@ -41,11 +41,12 @@ where
     fn from_packet_data<R: BufRead>(reader: &mut R) -> Result<Self>;
 }
 
-pub fn write_packet<T, W: Write>(content: T, dst: &mut W) -> Result<()>
+pub fn write_packet<T, U, W: Write>(content: T, dst: &mut W) -> Result<()>
 where
     T: Serialize,
-    Packet<T>: From<T>,
+    U: Serialize,
+    Packet<U>: From<T>,
 {
-    Packet::<T>::from(content).to_writer(dst)?;
+    Packet::<U>::from(content).to_writer(dst)?;
     Ok(())
 }
