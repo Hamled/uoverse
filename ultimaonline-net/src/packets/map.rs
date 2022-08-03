@@ -1,7 +1,6 @@
 use macros::packet;
 
-#[packet(var(id = 0xBF))]
+#[packet(extended(id = 0x08))]
 pub struct MapChange {
-    unknown_00: u16, // 0x0008
-    map_id: u8,
+    pub map_id: u8,
 }

@@ -319,6 +319,13 @@ async fn char_login<Io: AsyncIo>(mut state: CharSelect<Io>) -> Result<InWorld<Io
 
     let mut state = CharLogin::<Io>::from(state);
 
+    // Set the map first
+    state
+        .send(&map::MapChange {
+            map_id: 0x0, // Britannia
+        })
+        .await?;
+
     state
         .send(&char_login::LoginConfirmation {
             serial: PLAYER_SERIAL,

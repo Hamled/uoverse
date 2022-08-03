@@ -11,6 +11,7 @@ pub mod entity;
 pub mod gump;
 pub mod housing;
 pub mod login;
+pub mod map;
 pub mod mobile;
 pub mod movement;
 pub mod network;
