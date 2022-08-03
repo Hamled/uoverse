@@ -1,10 +1,11 @@
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::{
     convert::{TryFrom, TryInto},
-    io::{Cursor, Read},
+    io::{Cursor, Read, Write},
+    mem::size_of,
 };
 
-use crate::archive::uo_package::{self, UOPackage, UOPackageFile};
+use crate::archive::uo_package::{self, FileType, UOPackage, UOPackageFile};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -33,11 +34,20 @@ pub struct Tile {
 }
 
 impl Tile {
+    const SIZE: usize = size_of::<u16>() + size_of::<u8>();
+
     fn from_reader<R: Read>(reader: &mut R) -> Result<Self> {
         Ok(Self {
             kind: reader.read_u16::<LittleEndian>()?,
             height: reader.read_u8()?,
         })
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u16::<LittleEndian>(self.kind)?;
+        writer.write_u8(self.height)?;
+
+        Ok(())
     }
 }
 
@@ -45,7 +55,7 @@ pub struct Block<const BLOCK_SIZE: u32>
 where
     [(); BLOCK_SIZE as usize]:,
 {
-    _id: u32, // ClassicUO calls this "Header" but doesn't seem to use it
+    id: u32, // ClassicUO calls this "Header" but doesn't seem to use it
     tiles: [[Tile; BLOCK_SIZE as usize]; BLOCK_SIZE as usize], // 2D array, y-major
 }
 
@@ -53,9 +63,11 @@ impl<const BLOCK_SIZE: u32> Block<BLOCK_SIZE>
 where
     [(); BLOCK_SIZE as usize]:,
 {
+    const SIZE: usize = size_of::<u32>() + (Tile::SIZE * BLOCK_SIZE as usize * BLOCK_SIZE as usize);
+
     fn from_reader<R: Read>(reader: &mut R) -> Result<Self> {
         let mut block = Self {
-            _id: reader.read_u32::<LittleEndian>()?,
+            id: reader.read_u32::<LittleEndian>()?,
             tiles: [[Default::default(); BLOCK_SIZE as usize]; BLOCK_SIZE as usize],
         };
 
@@ -66,6 +78,18 @@ where
         }
 
         Ok(block)
+    }
+
+    fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u32::<LittleEndian>(self.id)?;
+
+        for tiles_y in self.tiles {
+            for tile in tiles_y {
+                tile.write(writer)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -82,6 +106,8 @@ impl<const BLOCK_SIZE: u32> Map<BLOCK_SIZE>
 where
     [(); BLOCK_SIZE as usize]:,
 {
+    const BLOCKS_PER_FILE: usize = 0x1000;
+
     pub fn new(width: u32, height: u32) -> Result<Self> {
         Self::validate_dimensions(width, height)?;
 
@@ -94,7 +120,7 @@ where
 
         for id in 0..blocks_num {
             map.blocks.push(Block {
-                _id: id,
+                id,
                 tiles: [[Default::default(); BLOCK_SIZE as usize]; BLOCK_SIZE as usize],
             })
         }
@@ -117,6 +143,61 @@ where
         }
 
         Ok(map)
+    }
+
+    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        for block in &self.blocks {
+            block.write(writer)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn into_files(self, prefix: &str) -> Result<Vec<UOPackageFile>> {
+        let num_files = (self.blocks.len() + Self::BLOCKS_PER_FILE - 1) / Self::BLOCKS_PER_FILE;
+
+        fn write_blocks_file<const BLOCK_SIZE: u32>(
+            blocks: &[Block<BLOCK_SIZE>],
+            file_name: &str,
+        ) -> Result<UOPackageFile>
+        where
+            [(); BLOCK_SIZE as usize]:,
+        {
+            let size =
+                Block::<BLOCK_SIZE>::SIZE * blocks.len().min(Map::<BLOCK_SIZE>::BLOCKS_PER_FILE);
+            let mut contents = vec![0u8; size];
+            let mut buf = contents.as_mut_slice();
+
+            for block in blocks {
+                block.write(&mut buf)?;
+            }
+
+            Ok(UOPackageFile {
+                hash: uo_package::uop_hash(file_name)?,
+                file_type: FileType::MapTiles,
+                timestamp: None,
+                contents,
+            })
+        }
+
+        // Break the map up into separate files
+        let mut files = Vec::<UOPackageFile>::with_capacity(num_files);
+        let mut file_num = 0u32;
+
+        let mut block_chunks = self.blocks.chunks_exact(Self::BLOCKS_PER_FILE);
+        for chunk in block_chunks.by_ref() {
+            let file_name = Self::file_path(prefix, file_num);
+            files.push(write_blocks_file(chunk, file_name.as_str())?);
+            file_num += 1;
+        }
+
+        let remainder = block_chunks.remainder();
+        if !remainder.is_empty() {
+            let file_name = Self::file_path(prefix, file_num);
+            files.push(write_blocks_file(remainder, file_name.as_str())?);
+        }
+
+        Ok(files)
     }
 
     pub fn set(&mut self, x: u32, y: u32, tile: Tile) -> Result<()> {
@@ -191,7 +272,7 @@ where
 // UO maps use 8x8 blocks
 pub type UOMap = Map<8>;
 
-struct PackageReader<'a> {
+pub struct PackageReader<'a> {
     package: &'a UOPackage,
     prefix: String,
     file_num: u32,
