@@ -116,6 +116,10 @@ fn packet_from_content(content_type: &Type, args: &PacketArgs) -> proc_macro2::T
     };
 
     quote! {
+        impl#impl_param crate::packets::IntoPacket for #from_type {
+            type Content = #content_type;
+        }
+
         impl#impl_param ::std::convert::From<#from_type> for crate::packets::Packet<#content_type> {
             fn from(val: #from_type) -> Self {
                 #size_calc

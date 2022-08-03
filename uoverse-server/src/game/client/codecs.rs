@@ -87,15 +87,15 @@ impl<C> CompressionCodec<C> {
     }
 }
 
-impl<'a, I, C: Encoder<&'a I>> Encoder<&'a I> for CompressionCodec<C> {
+impl<I, C: Encoder<I>> Encoder<I> for CompressionCodec<C> {
     type Error = C::Error;
 
-    fn encode(&mut self, pkt: &'a I, dst: &mut BytesMut) -> std::result::Result<(), Self::Error> {
+    fn encode(&mut self, pkt: I, dst: &mut BytesMut) -> std::result::Result<(), Self::Error> {
         use bytes::BufMut;
         use ultimaonline_net::compression::huffman;
 
         let mut tmp = BytesMut::with_capacity(64);
-        self.codec.encode(&pkt, &mut tmp)?;
+        self.codec.encode(pkt, &mut tmp)?;
         let compressed = huffman::compress(&*tmp);
 
         dst.put(compressed.as_slice());
