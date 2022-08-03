@@ -210,16 +210,19 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
         quote! {
             #vis trait #trait_name {}
 
-            #( impl #trait_name for #pkts {} )*
+            #(
+                impl #trait_name for #pkts {}
+                impl #trait_name for &#pkts {}
+            )*
 
-            impl<'a, P> ::tokio_util::codec::Encoder<&'a P> for #codec_name
+            impl<P> ::tokio_util::codec::Encoder<P> for #codec_name
             where
                 P: #trait_name + ::serde::ser::Serialize,
-                ::ultimaonline_net::packets::Packet<&'a P>: ::std::convert::From<&'a P>,
+                ::ultimaonline_net::packets::Packet<P>: ::std::convert::From<P>,
             {
                 type Error = ::ultimaonline_net::error::Error;
 
-                fn encode(&mut self, pkt: &'a P, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
+                fn encode(&mut self, pkt: P, dst: &mut ::bytes::BytesMut) -> Result<(), Self::Error> {
                     use ::bytes::BufMut;
 
                     ::ultimaonline_net::packets::write_packet(pkt, &mut dst.writer())
