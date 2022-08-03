@@ -160,6 +160,10 @@ where
             Ok(())
         }
     }
+
+    fn file_path(prefix: &str, file_num: u32) -> String {
+        format!("{}/{:08}.dat", prefix, file_num)
+    }
 }
 
 pub struct Metadata {
@@ -196,13 +200,13 @@ struct PackageReader<'a> {
 
 impl<'a> PackageReader<'a> {
     fn file_path(prefix: &str, file_num: u32) -> String {
-        format!("{}/{:08}.dat", prefix, file_num)
+        Map::<0>::file_path(prefix, file_num)
     }
 
-    fn get_file(&self, file_num: u32) -> Result<Option<&'a UOPackageFile>> {
+    fn get_next_file(&self) -> Result<Option<&'a UOPackageFile>> {
         Ok(self
             .package
-            .get_file(&Self::file_path(self.prefix.as_str(), file_num).as_str())?)
+            .get_file(Self::file_path(self.prefix.as_str(), self.file_num + 1).as_str())?)
     }
 }
 
@@ -230,7 +234,7 @@ impl<'a> Read for PackageReader<'a> {
 
         if amount == 0 {
             if let Some(file) = self
-                .get_file(self.file_num + 1)
+                .get_next_file()
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
             {
                 self.inner = Cursor::new(&file.contents);
