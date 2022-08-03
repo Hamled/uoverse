@@ -208,7 +208,7 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
 
         let pkts = codec_def.send_pkts.iter();
         quote! {
-            #vis trait #trait_name {}
+            #vis trait #trait_name: ::ultimaonline_net::packets::IntoPacket {}
 
             #(
                 impl #trait_name for #pkts {}
