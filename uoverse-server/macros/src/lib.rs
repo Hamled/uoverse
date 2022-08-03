@@ -215,10 +215,11 @@ pub fn define_codec(item: TokenStream) -> TokenStream {
                 impl #trait_name for &#pkts {}
             )*
 
-            impl<P> ::tokio_util::codec::Encoder<P> for #codec_name
+            impl<P, Q> ::tokio_util::codec::Encoder<P> for #codec_name
             where
-                P: #trait_name + ::serde::ser::Serialize,
-                ::ultimaonline_net::packets::Packet<P>: ::std::convert::From<P>,
+                P: #trait_name<Content = Q> + ::serde::ser::Serialize,
+                Q: ::serde::ser::Serialize,
+                ::ultimaonline_net::packets::Packet<Q>: ::std::convert::From<P>,
             {
                 type Error = ::ultimaonline_net::error::Error;
 

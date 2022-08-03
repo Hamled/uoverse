@@ -42,10 +42,11 @@ pub struct CharList<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> CharList<Io> {
-    pub async fn send<P>(&mut self, pkt: P) -> Result<()>
+    pub async fn send<P, Q>(&mut self, pkt: P) -> Result<()>
     where
-        P: codecs::CharListPacketSend + ::serde::ser::Serialize,
-        Packet<P>: From<P>,
+        P: codecs::CharListPacketSend<Content = Q> + ::serde::ser::Serialize,
+        Q: ::serde::ser::Serialize,
+        Packet<Q>: From<P>,
     {
         self.framer.send(pkt).await
     }
@@ -108,10 +109,11 @@ pub struct CharLogin<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> CharLogin<Io> {
-    pub async fn send<P>(&mut self, pkt: P) -> Result<()>
+    pub async fn send<P, Q>(&mut self, pkt: P) -> Result<()>
     where
-        P: codecs::CharLoginPacketSend + ::serde::ser::Serialize,
-        Packet<P>: From<P>,
+        P: codecs::CharLoginPacketSend<Content = Q> + ::serde::ser::Serialize,
+        Q: ::serde::ser::Serialize,
+        Packet<Q>: From<P>,
     {
         self.framer.send(pkt).await
     }
@@ -135,10 +137,11 @@ pub struct InWorld<Io: AsyncIo> {
 }
 
 impl<Io: AsyncIo> InWorld<Io> {
-    pub async fn send<P>(&mut self, pkt: P) -> Result<()>
+    pub async fn send<P, Q>(&mut self, pkt: P) -> Result<()>
     where
-        P: codecs::InWorldPacketSend + ::serde::ser::Serialize,
-        Packet<P>: From<P>,
+        P: codecs::InWorldPacketSend<Content = Q> + ::serde::ser::Serialize,
+        Q: ::serde::ser::Serialize,
+        Packet<Q>: From<P>,
     {
         self.framer.send(pkt).await
     }
