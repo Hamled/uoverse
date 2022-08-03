@@ -10,8 +10,8 @@ use tokio::{
     sync::Notify,
 };
 use tokio::{net::TcpListener, task::JoinHandle};
-use tracing::{debug_span, debug, error, info_span, info};
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+use tracing::{debug, debug_span, error, info, info_span};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use ultimaonline_net::types::Serial;
 use uoverse_server::game::client::{self, *};
 use uoverse_server::game::server;
@@ -35,10 +35,12 @@ pub async fn main() -> Result<()> {
             .expect(format!("Invalid listen port: {}", &args[2]).as_str());
     }
 
-
     let listen_socket = SocketAddrV4::new(listen_addr, listen_port);
 
-    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
+        .init();
 
     let span = info_span!("server");
     let _ = span.enter();
