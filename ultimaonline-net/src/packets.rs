@@ -34,6 +34,10 @@ where
     }
 }
 
+pub trait IntoPacket {
+    type Content;
+}
+
 pub trait FromPacketData
 where
     Self: Sized,
