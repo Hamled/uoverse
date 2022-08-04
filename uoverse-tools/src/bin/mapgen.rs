@@ -1,7 +1,7 @@
 use std::{convert::TryInto, fs::OpenOptions, io::Write};
 use uoverse_tools::{
     archive::uo_package::UOPackage,
-    map::{Metadata, Tile, UOMap},
+    map::{Tile, UOMap},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
